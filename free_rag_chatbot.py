@@ -7,11 +7,45 @@ from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 
 # Page Configuration
-st.set_page_config(page_title="Free RAG Chatbot", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Free Multi-File RAG Chatbot", page_icon="🤖", layout="wide")
+
+# Inject Custom CSS for Premium SaaS styling
+st.markdown("""
+    <style>
+    /* Metric Cards Custom Styling */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        padding: 18px 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    }
+    
+    /* Document Preview Cards */
+    .doc-card {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin-bottom: 10px;
+    }
+    
+    /* Interactive Button Animations */
+    div.stButton > button {
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # App Header
-st.title("🤖 Free Multi-File RAG Chatbot")
-st.markdown("Upload multiple files of different formats (PDF, DOCX, TXT, CSV, XLSX) and chat with all of them for **100% free** using local CPU embeddings and Gemini.")
+st.title("🤖 Free Multi-File RAG Analyzer")
+st.markdown("Upload multiple enterprise documents (PDF, DOCX, TXT, CSV, XLSX) and run semantic intelligence queries over all of them concurrently.")
 
 # Try to retrieve Gemini API Key from Streamlit Secrets automatically
 try:
@@ -29,11 +63,11 @@ with st.sidebar:
         st.success("🔑 API Key loaded securely from Streamlit Cloud Secrets!")
     
     st.header("2. Upload Documents")
-    # Enabled multiple files upload and added support for PDF, DOCX, TXT, CSV, XLSX
     uploaded_files = st.file_uploader(
         "Upload document files", 
         type=["pdf", "docx", "txt", "csv", "xlsx", "xls"], 
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        help="Upload up to 200MB of PDFs, Word docs, text files, or spreadsheets."
     )
 
 # Utility Functions
@@ -72,18 +106,61 @@ def extract_text_from_file(file):
         return ""
     return ""
 
-def chunk_text_with_source(text, filename, chunk_size=1000, overlap=200):
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunk_text = text[start:end]
-        chunks.append({
-            "text": chunk_text,
-            "source": filename
-        })
-        start += chunk_size - overlap
-    return chunks
+def recursive_split_text(text, filename, chunk_size=1000, overlap=200):
+    separators = ["\n\n", "\n", " ", ""]
+    
+    def split_recursive(text_to_split, separators_list):
+        if len(text_to_split) <= chunk_size:
+            return [text_to_split]
+        
+        separator = separators_list[0]
+        next_separators = separators_list[1:]
+        
+        if not next_separators:
+            # Hard boundary fall-back
+            return [text_to_split[i:i+chunk_size] for i in range(0, len(text_to_split), chunk_size - overlap)]
+        
+        splits = text_to_split.split(separator)
+        chunks = []
+        current_chunk = ""
+        
+        for split in splits:
+            # If adding the next split exceeds chunk_size
+            if len(current_chunk) + (len(separator) if current_chunk else 0) + len(split) > chunk_size:
+                if current_chunk:
+                    chunks.append(current_chunk)
+                
+                if len(split) > chunk_size:
+                    # Recurse with finer separators for oversized split
+                    chunks.extend(split_recursive(split, next_separators))
+                    current_chunk = ""
+                else:
+                    # Construct smart overlap from last appended chunk if possible
+                    if chunks:
+                        last_chunk = chunks[-1]
+                        overlap_start = max(0, len(last_chunk) - overlap)
+                        potential_chunk = last_chunk[overlap_start:] + separator + split
+                        if len(potential_chunk) <= chunk_size:
+                            current_chunk = potential_chunk
+                        else:
+                            current_chunk = split
+                    else:
+                        current_chunk = split
+            else:
+                if current_chunk:
+                    current_chunk += separator + split
+                else:
+                    current_chunk = split
+                    
+        if current_chunk:
+            chunks.append(current_chunk)
+            
+        return chunks
+        
+    raw_chunks = split_recursive(text, separators)
+    
+    # Structure chunks with source filename metadata
+    return [{"text": c, "source": filename} for c in raw_chunks]
 
 def cosine_similarity(v1, v2):
     dot_product = np.dot(v1, v2)
@@ -111,19 +188,27 @@ else:
         # Step 2: Process the uploaded files if changed
         if "file_signature" not in st.session_state or st.session_state["file_signature"] != current_file_signature:
             all_chunks = []
+            file_stats = []
             
-            with st.spinner("Extracting text and chunking files..."):
+            with st.spinner("Extracting text and chunking files recursively..."):
                 for file in uploaded_files:
                     raw_text = extract_text_from_file(file)
                     if raw_text.strip():
-                        chunks = chunk_text_with_source(raw_text, file.name)
+                        # Using new robust Recursive Character Text Splitter logic
+                        chunks = recursive_split_text(raw_text, file.name)
                         all_chunks.extend(chunks)
+                        file_stats.append({
+                            "name": file.name,
+                            "size": f"{file.size / 1024:.1f} KB",
+                            "chunks": len(chunks)
+                        })
                 
                 if not all_chunks:
                     st.error("No extractable text was found in any of the uploaded files.")
                     st.stop()
                 
                 st.session_state["all_chunks"] = all_chunks
+                st.session_state["file_stats"] = file_stats
                 st.session_state["file_signature"] = current_file_signature
                 
             with st.spinner(f"Generating local text embeddings for {len(all_chunks)} chunks..."):
@@ -132,16 +217,36 @@ else:
                 embeddings = model.encode(texts, show_progress_bar=False)
                 st.session_state["embeddings"] = embeddings
                 st.session_state["processed_data"] = True
-                st.success(f"Successfully indexed {len(uploaded_files)} files into {len(all_chunks)} text chunks!")
+                
+        # Premium UI: Display system statistics metrics cards
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Documents Processed", len(uploaded_files))
+        with col2:
+            st.metric("Vector Segments (Chunks)", len(st.session_state["all_chunks"]))
+        with col3:
+            st.metric("Vector Extraction Engine", "HuggingFace CPU")
+            
+        # Display document details in an Expandable Section
+        with st.expander("📁 View Processed Files and Statistics", expanded=False):
+            for stat in st.session_state.get("file_stats", []):
+                st.markdown(f"""
+                <div class="doc-card">
+                    📄 <strong>{stat['name']}</strong> &nbsp;|&nbsp; ⚖️ Size: <code>{stat['size']}</code> &nbsp;|&nbsp; 🧩 Segments: <code>{stat['chunks']}</code>
+                </div>
+                """, unsafe_allow_html=True)
         
         # Step 3: Initialize Chat History
         if "messages" not in st.session_state:
-            st.session_state["messages"] = [{"role": "assistant", "content": "Hello! I have analyzed your documents. Ask me anything about them!"}]
+            st.session_state["messages"] = [{"role": "assistant", "content": "Hello! I have analyzed your documents using recursive semantic indexing. Ask me anything about them!"}]
             
-        # Display chat messages
+        # Display chat messages with integrated styled references
         for message in st.session_state["messages"]:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
+                if message.get("sources"):
+                    with st.expander("📚 Sources & References used for this response", expanded=False):
+                        st.markdown(message["sources"])
                 
         # Chat Input
         if user_query := st.chat_input("Ask a question across all documents..."):
@@ -163,13 +268,16 @@ else:
                 # Format context with source metadata
                 context_parts = []
                 sources_used = set()
+                source_details = []
                 for idx in top_indices:
                     chunk = st.session_state["all_chunks"][idx]
                     context_parts.append(f"[Source File: {chunk['source']}]\n{chunk['text']}")
                     sources_used.add(chunk['source'])
+                    # Save exact snippet details for UI references
+                    source_details.append(f"**From `{chunk['source']}`:**\n> {chunk['text'].strip()}...")
                 
                 relevant_context = "\n\n---\n\n".join(context_parts)
-                sources_string = ", ".join(sources_used)
+                sources_string = "\n\n---\n\n".join(source_details)
                 
             # Call Gemini
             with st.chat_message("assistant"):
@@ -191,12 +299,19 @@ ANSWER:"""
                         response = gemini_model.generate_content(prompt)
                         assistant_response = response.text
                         
-                        # Display assistant response and append sources used
-                        full_response_with_sources = f"{assistant_response}\n\n---\n*Sources used: {sources_string}*"
-                        message_placeholder.write(full_response_with_sources)
+                        # Render clean assistant response
+                        message_placeholder.write(assistant_response)
+                        
+                        # Display sources in expandable card underneath response
+                        with st.expander("📚 Sources & References used for this response", expanded=False):
+                            st.markdown(sources_string)
                         
                         # Add assistant response to history
-                        st.session_state["messages"].append({"role": "assistant", "content": full_response_with_sources})
+                        st.session_state["messages"].append({
+                            "role": "assistant", 
+                            "content": assistant_response,
+                            "sources": sources_string
+                        })
                     except Exception as e:
                         st.error(f"Error calling Gemini API: {e}")
     else:
