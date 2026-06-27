@@ -152,7 +152,23 @@ GEMINI_API_KEY = "your_actual_api_key_here"
 
 ## Free-Tier Notes
 
-Gemini free tier may rate-limit requests. Query expansion is off by default because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval. For unlimited local testing, choose the Ollama provider in the sidebar and run a local model such as `llama3.1:8b`.
+Gemini free tier may rate-limit requests. Query expansion is Gemini-only (the toggle is disabled when using Ollama) because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval. For unlimited local testing, choose the Ollama provider in the sidebar and run a local model such as `llama3.1:8b`.
+
+## Reliability Notes
+
+The app is built to degrade gracefully instead of crashing on common failure modes:
+
+- **Upload limits**: 50 MB per file, 150 MB total by default (tune `MAX_FILE_SIZE_MB` / `MAX_TOTAL_UPLOAD_MB` in the script). Oversized files are skipped with a clear message rather than hanging the app.
+- **Per-file chunk cap**: extremely large documents are truncated to `MAX_CHUNKS_PER_FILE` chunks with a visible warning, so one huge upload can't make indexing hang indefinitely.
+- **Retrieval and reranking failures** (e.g. the cross-encoder model fails to load on a memory-constrained host) fall back to ungrounded or score-only ranking instead of crashing the chat turn.
+- **LLM streaming retries**: transient Gemini/Ollama errors are retried automatically; if a stream fails partway through, the partial answer already shown is preserved rather than discarded.
+- **Encoding fallbacks**: `.txt` and `.csv` files that aren't UTF-8 fall back to Latin-1 instead of failing the whole upload.
+- **Malformed/corrupted chat history** on disk is detected and replaced with a fresh history instead of crashing the chat UI.
+- Uploaded file names are HTML-escaped before being rendered in the file-stats panel.
+
+## Known Dependency Note
+
+`google-generativeai` is Google's older Gemini SDK and has been in maintenance mode since the unified `google-genai` package was introduced. It still works for the model used here, but if you hit installation issues on a newer Python version, that's the underlying cause — migrating to `google-genai` is a reasonable future improvement. `numpy` is pinned below 2.0 for guaranteed compatibility with `faiss-cpu`.
 
 ## Deployment
 
@@ -182,3 +198,4 @@ Both are ignored by Git because they are generated locally and can become large.
 - Markdown transcript download for sharing conversations.
 - Optional Ollama provider for local quota-free development.
 - Sample documents for a quick recruiter demo.
+- Hardened error handling, upload limits, and graceful degradation across the retrieval and generation pipeline.
