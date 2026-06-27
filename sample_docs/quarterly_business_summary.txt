@@ -1,0 +1,13 @@
+Quarterly Business Summary
+
+Executive Summary
+The automation team delivered three high-impact internal tools this quarter: a document Q&A assistant, a reporting workflow monitor, and a spreadsheet reconciliation helper. The document Q&A assistant reduced manual lookup time for policy questions and improved consistency in answers.
+
+Operational Highlights
+The team processed 1,200 support knowledge-base articles and created a searchable retrieval layer for internal users. Average response time improved because employees could ask natural-language questions instead of manually browsing folders.
+
+Risks and Constraints
+The largest constraints are API rate limits, inconsistent document formatting, and missing source ownership. The team recommends local fallback models for development, page-aware citations for review workflows, and a monthly content refresh process.
+
+Next Quarter Priorities
+Next quarter will focus on evaluation datasets, automated quality checks, better PDF page references, and deployment hardening. The team also plans to add role-based access controls before expanding usage to additional departments.

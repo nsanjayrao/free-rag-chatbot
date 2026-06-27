@@ -1,0 +1,7 @@
+risk_id,area,description,impact,mitigation,owner,status
+R-001,AI Quota,Gemini free-tier rate limits can interrupt demos,Medium,Keep query expansion off and add Ollama fallback,Engineering,Open
+R-002,Citations,Chunk-only citations are less useful for long PDFs,High,Add page-aware PDF citation metadata,Engineering,In Progress
+R-003,Data Quality,Old or inconsistent documents reduce answer quality,High,Create monthly source refresh checklist,Operations,Open
+R-004,Security,Users may upload sensitive documents to public deployments,High,Add password gate and data handling warning,Security,Open
+R-005,Performance,Large spreadsheets can slow indexing,Medium,Chunk rows by range and cache indexes,Engineering,Done
+R-006,Adoption,Users may not understand how to ask good questions,Low,Add sample prompts and demo documents,Product,Done

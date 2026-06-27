@@ -1,0 +1,16 @@
+AI Governance Policy
+
+Purpose
+This policy defines how internal teams should use generative AI tools for document analysis, customer support, reporting, and workflow automation. Teams may use approved AI tools to summarize documents, draft internal notes, classify tickets, and search knowledge bases.
+
+Data Handling Rules
+Employees must not upload passwords, private keys, payment card numbers, medical data, or confidential customer records into unapproved AI systems. Approved AI applications must minimize data sent to external providers and should prefer local processing for embeddings, indexing, and retrieval.
+
+Human Review
+AI-generated answers must be reviewed by a responsible employee before being sent to customers or used for financial, legal, security, or hiring decisions. The reviewer must check cited sources and confirm that the answer is supported by the documents.
+
+Monitoring
+AI applications should log high-level usage metrics, retrieval quality issues, and user feedback. Teams should review hallucination reports and improve prompts, retrieval settings, or source documents when needed.
+
+Ownership
+The Analytics and Automation team owns the internal document intelligence roadmap. Business teams are responsible for validating output quality and keeping source documents updated.

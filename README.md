@@ -18,9 +18,12 @@ This project is designed as a portfolio-ready retrieval system rather than a bas
 - Rerank retrieved chunks with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
 - Generate grounded answers with Gemini 3.5 Flash.
 - Stream responses into the chat UI.
-- Show citations with the exact retrieved source snippets.
+- Show citations with exact retrieved snippets plus PDF page, spreadsheet sheet, row range, or DOCX paragraph metadata when available.
 - Cache FAISS indexes so repeated uploads are fast.
 - Persist chat history per document set.
+- Export chat transcripts as Markdown.
+- Rebuild indexes or clear chat history from the sidebar.
+- Use Gemini for hosted demos or Ollama for local quota-free testing.
 
 ## Architecture
 
@@ -44,7 +47,13 @@ flowchart TD
 
 ## Demo Walkthrough
 
-1. Start the app and enter a Gemini API key.
+You can test the app immediately with the files in `sample_docs/`:
+
+- `ai_governance_policy.txt`
+- `quarterly_business_summary.txt`
+- `project_risks.csv`
+
+1. Start the app and enter a Gemini API key, or choose Ollama for local testing.
 2. Upload one or more files, such as a PDF report, a DOCX policy, and a spreadsheet.
 3. The app extracts text, builds chunks, creates local embeddings, and writes a FAISS index cache.
 4. Ask a question like `What are the main risks mentioned across these documents?`
@@ -58,6 +67,8 @@ flowchart TD
 - `Which document discusses implementation details?`
 - `What evidence supports this answer? Cite the source chunks.`
 - `What information is missing from these documents?`
+- `Which project risks are still open and who owns them?`
+- `What controls does the AI governance policy require?`
 
 ## Retrieval Pipeline
 
@@ -100,7 +111,7 @@ Documents
 | Vector search | FAISS |
 | Keyword search | rank-bm25 |
 | Reranking | SentenceTransformers CrossEncoder |
-| LLM | Google Generative AI, Gemini 3.5 Flash |
+| LLM | Google Generative AI Gemini 3.5 Flash, optional local Ollama |
 | Persistence | Local FAISS cache and JSON chat history |
 
 ## Why This Is Portfolio-Ready
@@ -111,9 +122,11 @@ This project shows practical RAG engineering choices that appear in real systems
 - **Hybrid retrieval:** combines semantic similarity with exact keyword matching.
 - **Reranking:** improves final context quality before generation.
 - **Grounded prompting:** instructs the model to answer only from retrieved evidence.
-- **Citations:** makes outputs easier to trust and inspect.
+- **Page and sheet-aware citations:** makes outputs easier to trust and inspect.
 - **Caching:** avoids rebuilding embeddings and indexes for unchanged uploads.
 - **Memory:** supports follow-up questions without losing conversation context.
+- **Local fallback:** supports Ollama for development without cloud quota limits.
+- **Exportable transcripts:** makes answers easier to share as Markdown.
 
 ## Quick Start
 
@@ -139,7 +152,7 @@ GEMINI_API_KEY = "your_actual_api_key_here"
 
 ## Free-Tier Notes
 
-Gemini free tier may rate-limit requests. Query expansion is off by default because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval.
+Gemini free tier may rate-limit requests. Query expansion is off by default because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval. For unlimited local testing, choose the Ollama provider in the sidebar and run a local model such as `llama3.1:8b`.
 
 ## Deployment
 
@@ -159,3 +172,13 @@ The app creates these folders during use:
 - `.chat_history/` for persistent chat transcripts.
 
 Both are ignored by Git because they are generated locally and can become large.
+
+
+## Recent Upgrades
+
+- Page-aware PDF citations and sheet/row-aware spreadsheet citations.
+- Retrieval diagnostics showing semantic, BM25, combined, and rerank scores.
+- Sidebar controls for clearing chat history and rebuilding the FAISS cache.
+- Markdown transcript download for sharing conversations.
+- Optional Ollama provider for local quota-free development.
+- Sample documents for a quick recruiter demo.
