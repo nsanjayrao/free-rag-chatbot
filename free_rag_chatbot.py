@@ -728,12 +728,12 @@ if (llm_provider == "Gemini" and gemini_key) or llm_provider != "Gemini":
         ensure_storage_dirs()
         signature = file_signature(uploaded_files)
 
-        if st.sidebar.button("Clear chat history", use_container_width=True):
+        if st.sidebar.button("Clear chat history", width="stretch"):
             st.session_state["messages"] = default_chat_message()
             save_chat_history(signature, st.session_state["messages"])
             st.rerun()
 
-        if st.sidebar.button("Rebuild index cache", use_container_width=True):
+        if st.sidebar.button("Rebuild index cache", width="stretch"):
             remove_index_cache(signature)
             st.session_state.pop("file_signature", None)
             st.session_state.pop("document_index", None)
@@ -798,7 +798,7 @@ if (llm_provider == "Gemini" and gemini_key) or llm_provider != "Gemini":
                         st.markdown(message["sources"])
                 if show_diagnostics and message.get("diagnostics"):
                     with st.expander("Retrieval diagnostics", expanded=False):
-                        st.dataframe(pd.DataFrame(message["diagnostics"]), use_container_width=True)
+                        st.dataframe(pd.DataFrame(message["diagnostics"]), width="stretch")
 
         if user_query := st.chat_input("Ask a question across all documents..."):
             st.session_state["messages"].append({"role": "user", "content": user_query})
@@ -866,7 +866,7 @@ if (llm_provider == "Gemini" and gemini_key) or llm_provider != "Gemini":
                         st.markdown(sources_string)
                 if show_diagnostics and diagnostics:
                     with st.expander("Retrieval diagnostics", expanded=False):
-                        st.dataframe(pd.DataFrame(diagnostics), use_container_width=True)
+                        st.dataframe(pd.DataFrame(diagnostics), width="stretch")
 
             st.session_state["messages"].append(
                 {
