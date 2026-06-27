@@ -25,7 +25,7 @@ CHAT_DIR = APP_DIR / ".chat_history"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 GEMINI_MODEL_NAME = "gemini-3.5-flash"
-DEFAULT_OLLAMA_MODEL = "llama3.1:8b"
+DEEPSEEK_MODEL_NAME = "deepseek-v4-flash"
 PARSER_VERSION = "v2-page-sheet-citations"
 TOP_K_RETRIEVAL = 10
 TOP_K_CONTEXT = 4
@@ -79,12 +79,17 @@ try:
 except Exception:
     gemini_key = ""
 
+try:
+    deepseek_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+except Exception:
+    deepseek_key = ""
+
 with st.sidebar:
     st.header("1. Answer Model")
     llm_provider = st.selectbox(
         "Provider",
-        ["Gemini", "Ollama (local)"],
-        help="Gemini works on Streamlit Cloud. Ollama is for local unlimited testing.",
+        ["Gemini", "DeepSeek"],
+        help="Gemini and DeepSeek work on Streamlit Cloud using API keys.",
     )
 
     if llm_provider == "Gemini":
@@ -95,11 +100,16 @@ with st.sidebar:
                 help="Create a free key in Google AI Studio.",
             )
         else:
-            st.success("API key loaded from Streamlit secrets.")
-    else:
-        ollama_url = st.text_input("Ollama URL", value="http://localhost:11434")
-        ollama_model = st.text_input("Ollama model", value=DEFAULT_OLLAMA_MODEL)
-        st.caption("Run Ollama locally first, then use this option for quota-free testing.")
+            st.success("Gemini API key loaded from secrets.")
+    elif llm_provider == "DeepSeek":
+        if not deepseek_key:
+            deepseek_key = st.text_input(
+                "Enter DeepSeek API Key",
+                type="password",
+                help="Get an API key from platform.deepseek.com.",
+            )
+        else:
+            st.success("DeepSeek API key loaded from secrets.")
 
     st.header("2. Documents")
     uploaded_files = st.file_uploader(
@@ -633,45 +643,67 @@ def stream_gemini_response(prompt):
             yield text
 
 
-def stream_ollama_response(prompt, base_url, model_name):
-    endpoint = base_url.rstrip("/") + "/api/generate"
-    payload = json.dumps({"model": model_name, "prompt": prompt, "stream": True}).encode("utf-8")
-    request = urllib.request.Request(endpoint, data=payload, headers={"Content-Type": "application/json"})
+def stream_deepseek_response(prompt, api_key):
+    endpoint = "https://api.deepseek.com/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    payload = json.dumps({
+        "model": DEEPSEEK_MODEL_NAME,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": True,
+        "temperature": 0.2
+    }).encode("utf-8")
+    request = urllib.request.Request(endpoint, data=payload, headers=headers)
     with urllib.request.urlopen(request, timeout=120) as response:
         for line in response:
-            if not line.strip():
+            line_str = line.decode("utf-8").strip()
+            if not line_str:
                 continue
-            data = json.loads(line.decode("utf-8"))
-            if data.get("response"):
-                yield data["response"]
-            if data.get("done"):
-                break
+            if line_str.startswith("data: "):
+                data_content = line_str[6:]
+                if data_content == "[DONE]":
+                    break
+                try:
+                    data = json.loads(data_content)
+                    choices = data.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            yield content
+                except Exception:
+                    continue
 
 
 def stream_llm_response(prompt, provider, **kwargs):
     if provider == "Gemini":
         yield from stream_gemini_response(prompt)
-    else:
-        yield from stream_ollama_response(prompt, kwargs["ollama_url"], kwargs["ollama_model"])
+    elif provider == "DeepSeek":
+        yield from stream_deepseek_response(prompt, kwargs["deepseek_key"])
 
 
 def friendly_llm_error(error, provider):
     message = str(error)
     lower_message = message.lower()
-    if provider == "Gemini" and ("429" in message or "quota" in lower_message or "rate" in lower_message):
-        retry_match = re.search(r"retry[_ ]delay\s*\{\s*seconds:\s*(\d+)", message, re.IGNORECASE)
-        retry_seconds = retry_match.group(1) if retry_match else "30"
-        return (
-            f"Gemini is rate-limiting the free tier right now. "
-            f"Please wait about {retry_seconds} seconds and ask again. "
-            "Tip: keep Query expansion turned off to use only one Gemini request per answer."
-        )
-    if provider != "Gemini":
-        return (
-            "Could not reach Ollama. Make sure Ollama is running locally, "
-            f"the model is pulled, and the URL is correct. Details: {message}"
-        )
-    return f"Error calling Gemini API: {message}"
+    if provider == "Gemini":
+        if "429" in message or "quota" in lower_message or "rate" in lower_message:
+            retry_match = re.search(r"retry[_ ]delay\s*\{\s*seconds:\s*(\d+)", message, re.IGNORECASE)
+            retry_seconds = retry_match.group(1) if retry_match else "30"
+            return (
+                f"Gemini is rate-limiting the free tier right now. "
+                f"Please wait about {retry_seconds} seconds and ask again. "
+                "Tip: keep Query expansion turned off to use only one Gemini request per answer."
+            )
+        return f"Error calling Gemini API: {message}"
+    elif provider == "DeepSeek":
+        if "401" in message:
+            return "DeepSeek authentication failed. Please check if your API key is correct and has sufficient balance."
+        if "429" in message:
+            return "DeepSeek API rate limit exceeded. Please wait a moment before trying again."
+        return f"Error calling DeepSeek API: {message}"
+    return f"Error: {message}"
 
 
 def build_prompt(messages, context, query):
@@ -716,8 +748,10 @@ if llm_provider == "Gemini" and not gemini_key:
 elif llm_provider == "Gemini":
     genai.configure(api_key=gemini_key)
     genai._configured_for_expansion = True
+elif llm_provider == "DeepSeek" and not deepseek_key:
+    st.warning("Please enter your DeepSeek API key in the sidebar to get started.")
 
-if (llm_provider == "Gemini" and gemini_key) or llm_provider != "Gemini":
+if (llm_provider == "Gemini" and gemini_key) or (llm_provider == "DeepSeek" and deepseek_key):
     if uploaded_files:
         uploaded_files, upload_errors = validate_uploads(uploaded_files)
         for error_message in upload_errors:
@@ -836,8 +870,8 @@ if (llm_provider == "Gemini" and gemini_key) or llm_provider != "Gemini":
                     streamed_text = ""
                     try:
                         llm_kwargs = {}
-                        if llm_provider != "Gemini":
-                            llm_kwargs = {"ollama_url": ollama_url, "ollama_model": ollama_model}
+                        if llm_provider == "DeepSeek":
+                            llm_kwargs = {"deepseek_key": deepseek_key}
                         for text_chunk in stream_llm_response(prompt, llm_provider, **llm_kwargs):
                             streamed_text += text_chunk
                             message_placeholder.markdown(streamed_text)

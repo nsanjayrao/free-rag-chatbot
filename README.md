@@ -23,7 +23,7 @@ This project is designed as a portfolio-ready retrieval system rather than a bas
 - Persist chat history per document set.
 - Export chat transcripts as Markdown.
 - Rebuild indexes or clear chat history from the sidebar.
-- Use Gemini for hosted demos or Ollama for local quota-free testing.
+- Use Gemini or DeepSeek for hosted demos or cloud testing.
 
 ## Architecture
 
@@ -53,7 +53,7 @@ You can test the app immediately with the files in `sample_docs/`:
 - `quarterly_business_summary.txt`
 - `project_risks.csv`
 
-1. Start the app and enter a Gemini API key, or choose Ollama for local testing.
+1. Start the app and enter a Gemini or DeepSeek API key.
 2. Upload one or more files, such as a PDF report, a DOCX policy, and a spreadsheet.
 3. The app extracts text, builds chunks, creates local embeddings, and writes a FAISS index cache.
 4. Ask a question like `What are the main risks mentioned across these documents?`
@@ -111,7 +111,7 @@ Documents
 | Vector search | FAISS |
 | Keyword search | rank-bm25 |
 | Reranking | SentenceTransformers CrossEncoder |
-| LLM | Google Generative AI Gemini 3.5 Flash, optional local Ollama |
+| LLM | Google Generative AI Gemini 3.5 Flash or DeepSeek-V4-Flash |
 | Persistence | Local FAISS cache and JSON chat history |
 
 ## Why This Is Portfolio-Ready
@@ -125,7 +125,7 @@ This project shows practical RAG engineering choices that appear in real systems
 - **Page and sheet-aware citations:** makes outputs easier to trust and inspect.
 - **Caching:** avoids rebuilding embeddings and indexes for unchanged uploads.
 - **Memory:** supports follow-up questions without losing conversation context.
-- **Local fallback:** supports Ollama for development without cloud quota limits.
+- **Multi-LLM Support:** supports Gemini and DeepSeek-V4-Flash for testing and demos.
 - **Exportable transcripts:** makes answers easier to share as Markdown.
 
 ## Quick Start
@@ -152,7 +152,7 @@ GEMINI_API_KEY = "your_actual_api_key_here"
 
 ## Free-Tier Notes
 
-Gemini free tier may rate-limit requests. Query expansion is Gemini-only (the toggle is disabled when using Ollama) because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval. For unlimited local testing, choose the Ollama provider in the sidebar and run a local model such as `llama3.1:8b`.
+Gemini free tier may rate-limit requests. Query expansion is Gemini-only (the toggle is disabled when using DeepSeek) because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval.
 
 ## Reliability Notes
 
@@ -161,7 +161,7 @@ The app is built to degrade gracefully instead of crashing on common failure mod
 - **Upload limits**: 50 MB per file, 150 MB total by default (tune `MAX_FILE_SIZE_MB` / `MAX_TOTAL_UPLOAD_MB` in the script). Oversized files are skipped with a clear message rather than hanging the app.
 - **Per-file chunk cap**: extremely large documents are truncated to `MAX_CHUNKS_PER_FILE` chunks with a visible warning, so one huge upload can't make indexing hang indefinitely.
 - **Retrieval and reranking failures** (e.g. the cross-encoder model fails to load on a memory-constrained host) fall back to ungrounded or score-only ranking instead of crashing the chat turn.
-- **LLM streaming retries**: transient Gemini/Ollama errors are retried automatically; if a stream fails partway through, the partial answer already shown is preserved rather than discarded.
+- **LLM streaming retries**: transient Gemini/DeepSeek errors are retried automatically; if a stream fails partway through, the partial answer already shown is preserved rather than discarded.
 - **Encoding fallbacks**: `.txt` and `.csv` files that aren't UTF-8 fall back to Latin-1 instead of failing the whole upload.
 - **Malformed/corrupted chat history** on disk is detected and replaced with a fresh history instead of crashing the chat UI.
 - Uploaded file names are HTML-escaped before being rendered in the file-stats panel.
@@ -196,6 +196,6 @@ Both are ignored by Git because they are generated locally and can become large.
 - Retrieval diagnostics showing semantic, BM25, combined, and rerank scores.
 - Sidebar controls for clearing chat history and rebuilding the FAISS cache.
 - Markdown transcript download for sharing conversations.
-- Optional Ollama provider for local quota-free development.
+- Support for both Google Gemini and DeepSeek API models.
 - Sample documents for a quick recruiter demo.
 - Hardened error handling, upload limits, and graceful degradation across the retrieval and generation pipeline.
