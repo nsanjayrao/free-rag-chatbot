@@ -11,11 +11,17 @@ st.set_page_config(page_title="Free RAG Chatbot", page_icon="🤖", layout="wide
 st.title("🤖 Free RAG Chatbot")
 st.markdown("Upload a PDF and chat with its content for *100% free* using local CPU embeddings and Google's Gemini Free Tier API.")
 
+# Try to retrieve Gemini API Key from Streamlit Secrets automatically
+gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+
 # Sidebar for Setup
 with st.sidebar:
-    st.header("1. Setup Credentials")
-    # API Key Input
-    gemini_key = st.text_input("Enter Gemini API Key", type="password", help="Get a free key from Google AI Studio: https://aistudio.google.com/")
+    if not gemini_key:
+        st.header("1. Setup Credentials")
+        # Manual input fallback if no secret is configured
+        gemini_key = st.text_input("Enter Gemini API Key", type="password", help="Get a free key from Google AI Studio: https://aistudio.google.com/")
+    else:
+        st.success("🔑 API Key loaded securely from Streamlit Cloud Secrets!")
     
     st.header("2. Upload Document")
     uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
