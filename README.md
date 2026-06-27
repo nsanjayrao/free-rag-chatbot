@@ -6,11 +6,7 @@ This project is designed as a portfolio-ready retrieval system rather than a bas
 
 ## Live Demo
 
-Add your deployed Streamlit link here after publishing:
-
-~~~text
-https://your-app-name.streamlit.app
-~~~
+[Open the live Streamlit demo](https://free-rag-chatbot-frc.streamlit.app/)
 
 ## What It Does
 
