@@ -6,3 +6,6 @@ openpyxl
 sentence-transformers
 google-generativeai
 numpy
+faiss-cpu
+rank-bm25
+xlrd

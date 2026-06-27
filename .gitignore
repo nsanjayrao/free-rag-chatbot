@@ -1,13 +1,19 @@
-# Python Virtual Environments
+# Python virtual environments
 venv/
 .venv/
 env/
-_pycache_/
+
+# Python cache files
+__pycache__/
 *.pyc
 
-# Operating System Files
+# Local RAG runtime artifacts
+.rag_cache/
+.chat_history/
+
+# Operating system files
 .DS_Store
 Thumbs.db
 
-# Streamlit secrets (just in case they put them there)
+# Streamlit secrets
 .streamlit/secrets.toml
