@@ -91,7 +91,7 @@ with st.sidebar:
     st.header("3. Retrieval")
     use_hybrid_search = st.toggle("Hybrid BM25 + FAISS", value=True)
     use_reranker = st.toggle("Cross-encoder reranking", value=True)
-    use_query_expansion = st.toggle("Query expansion", value=True)
+    use_query_expansion = st.toggle("Query expansion", value=False, help="Uses one extra Gemini request per question. Keep this off on the free tier unless you need broader retrieval.")
     top_k_context = st.slider("Cited chunks", 2, 8, TOP_K_CONTEXT)
 
 
@@ -430,6 +430,20 @@ def stream_gemini_response(prompt):
             yield text
 
 
+def friendly_gemini_error(error):
+    message = str(error)
+    lower_message = message.lower()
+    if "429" in message or "quota" in lower_message or "rate" in lower_message:
+        retry_match = re.search(r"retry[_ ]delay\s*\{\s*seconds:\s*(\d+)", message, re.IGNORECASE)
+        retry_seconds = retry_match.group(1) if retry_match else "30"
+        return (
+            f"Gemini is rate-limiting the free tier right now. "
+            f"Please wait about {retry_seconds} seconds and ask again. "
+            "Tip: keep Query expansion turned off to use only one Gemini request per answer."
+        )
+    return f"Error calling Gemini API: {message}"
+
+
 if not gemini_key:
     st.warning("Please enter your Google Gemini API key in the sidebar to get started.")
 else:
@@ -529,7 +543,7 @@ Answer:"""
                         streamed_text += text_chunk
                         message_placeholder.markdown(streamed_text)
                 except Exception as exc:
-                    streamed_text = f"Error calling Gemini API: {exc}"
+                    streamed_text = friendly_gemini_error(exc)
                     message_placeholder.error(streamed_text)
 
                 if sources_string:
