@@ -19,13 +19,15 @@ from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
 
+# ── Constants ──────────────────────────────────────────────────────────────
 APP_DIR = Path(__file__).resolve().parent
 CACHE_DIR = APP_DIR / ".rag_cache"
 CHAT_DIR = APP_DIR / ".chat_history"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-GEMINI_MODEL_NAME = "gemini-3.5-flash"
-DEEPSEEK_MODEL_NAME = "deepseek-v4-flash"
+GEMINI_MODEL_NAME = "gemini-2.5-flash"
+HF_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3"   # any HF chat model works here
+HF_ENDPOINT = f"https://api-inference.huggingface.co/models/{HF_MODEL_NAME}/v1/chat/completions"
 PARSER_VERSION = "v2-page-sheet-citations"
 TOP_K_RETRIEVAL = 10
 TOP_K_CONTEXT = 4
@@ -36,108 +38,304 @@ LLM_MAX_RETRIES = 2
 LLM_RETRY_BASE_DELAY_SECONDS = 2
 
 
-st.set_page_config(page_title="Professional RAG Chatbot", page_icon="AI", layout="wide")
+# ── Page config & CSS ──────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="RAG Analyzer",
+    page_icon="🔍",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 st.markdown(
     """
-    <style>
-    div[data-testid="stMetric"] {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        padding: 18px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05);
-    }
-    .doc-card {
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 12px 15px;
-        margin-bottom: 10px;
-    }
-    div.stButton > button {
-        border-radius: 8px !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-    div.stButton > button:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
-    }
-    </style>
-    """,
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* ── Base ── */
+.stApp { background-color: #ffffff; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header[data-testid="stHeader"] { background: transparent; }
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background-color: #f5f5f7 !important;
+    border-right: 1px solid #e5e5e5 !important;
+}
+[data-testid="stSidebar"] .stMarkdown p {
+    font-size: 0.82rem;
+    color: #6e6e73;
+}
+[data-testid="stSidebar"] h3 {
+    font-size: 0.62rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.09em !important;
+    text-transform: uppercase !important;
+    color: #86868b !important;
+    margin-top: 24px !important;
+    margin-bottom: 8px !important;
+    padding-bottom: 6px !important;
+    border-bottom: 1px solid #e5e5e5 !important;
+}
+
+/* ── Metrics ── */
+[data-testid="stMetric"] {
+    background: #f5f5f7 !important;
+    border-radius: 12px !important;
+    padding: 14px 18px !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+[data-testid="stMetricLabel"] p {
+    font-size: 0.62rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.07em !important;
+    color: #86868b !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    color: #1d1d1f !important;
+}
+
+/* ── Buttons ── */
+.stButton > button {
+    border-radius: 980px !important;
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    border: 1px solid #d2d2d7 !important;
+    background: #ffffff !important;
+    color: #1d1d1f !important;
+    padding: 6px 16px !important;
+    transition: background 0.15s ease, border-color 0.15s ease !important;
+    box-shadow: none !important;
+}
+.stButton > button:hover {
+    background: #ebebeb !important;
+    border-color: #c7c7cc !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ── Chat input ── */
+[data-testid="stChatInputTextArea"] {
+    border-radius: 22px !important;
+    border: 1px solid #d2d2d7 !important;
+    background: #f5f5f7 !important;
+    font-size: 0.9rem !important;
+}
+[data-testid="stChatInputTextArea"]:focus {
+    border-color: #0071e3 !important;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(0,113,227,0.12) !important;
+    outline: none !important;
+}
+
+/* ── Chat messages ── */
+[data-testid="stChatMessage"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 6px 0 !important;
+}
+
+/* User bubble — right aligned */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
+    flex-direction: row-reverse !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"] {
+    background: #1d1d1f !important;
+    color: #ffffff !important;
+    border-radius: 18px 18px 4px 18px !important;
+    padding: 10px 16px !important;
+    max-width: 80% !important;
+}
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"] * {
+    color: #ffffff !important;
+}
+
+/* Assistant bubble — left */
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stMarkdownContainer"] {
+    background: #f5f5f7 !important;
+    border-radius: 4px 18px 18px 18px !important;
+    padding: 12px 16px !important;
+    max-width: 86% !important;
+    color: #1d1d1f !important;
+}
+
+/* ── File uploader ── */
+[data-testid="stFileUploader"] {
+    background: #ffffff !important;
+    border: 2px dashed #c7c7cc !important;
+    border-radius: 12px !important;
+    padding: 6px !important;
+    transition: border-color 0.2s ease !important;
+}
+[data-testid="stFileUploader"]:hover,
+[data-testid="stFileUploader"]:focus-within {
+    border-color: #0071e3 !important;
+}
+[data-testid="stFileUploaderDropzone"] {
+    background: #f5f5f7 !important;
+    border-radius: 10px !important;
+}
+
+/* ── Expander ── */
+[data-testid="stExpander"] summary {
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    color: #1d1d1f !important;
+}
+
+/* ── Download button ── */
+[data-testid="stDownloadButton"] > button {
+    border-radius: 980px !important;
+    font-size: 0.8rem !important;
+    font-weight: 500 !important;
+    border: 1px solid #d2d2d7 !important;
+    background: #ffffff !important;
+    color: #1d1d1f !important;
+}
+
+/* ── Welcome / landing screens ── */
+.welcome-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 65vh;
+    text-align: center;
+    padding: 40px 24px;
+}
+.welcome-icon { font-size: 56px; margin-bottom: 20px; line-height: 1; }
+.welcome-title {
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.04em;
+    margin: 0 0 12px;
+}
+.welcome-sub {
+    font-size: 1.05rem;
+    color: #6e6e73;
+    line-height: 1.6;
+    max-width: 440px;
+    margin: 0 auto 40px;
+}
+.feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-width: 540px;
+    width: 100%;
+    text-align: left;
+}
+.feature-card {
+    background: #f5f5f7;
+    border-radius: 14px;
+    padding: 20px;
+}
+.feature-card-title {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin: 0 0 5px;
+}
+.feature-card-desc {
+    font-size: 0.76rem;
+    color: #6e6e73;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ── Doc card ── */
+.doc-card {
+    background: #ffffff;
+    border: 1px solid #e5e5e5;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    font-size: 0.83rem;
+    color: #1d1d1f;
+}
+</style>
+""",
     unsafe_allow_html=True,
 )
 
-st.title("Professional Multi-File RAG Analyzer")
-st.markdown(
-    "Upload PDF, DOCX, TXT, CSV, or Excel files and ask grounded questions with FAISS retrieval, hybrid search, reranking, memory, streaming, export, and page-aware citations."
-)
 
+# ── Secrets ────────────────────────────────────────────────────────────────
 try:
     gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 except Exception:
     gemini_key = ""
 
 try:
-    deepseek_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+    hf_key = st.secrets.get("HF_API_TOKEN", "")
 except Exception:
-    deepseek_key = ""
+    hf_key = ""
 
+
+# ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("1. Answer Model")
+    st.markdown("### Model")
     llm_provider = st.selectbox(
         "Provider",
-        ["Gemini", "DeepSeek"],
-        help="Gemini and DeepSeek work on Streamlit Cloud using API keys.",
+        ["Gemini", "HuggingFace"],
+        help=(
+            "Gemini: free tier via Google AI Studio. "
+            "HuggingFace: free serverless inference, just needs a free HF token."
+        ),
+        label_visibility="collapsed",
     )
 
     if llm_provider == "Gemini":
         if not gemini_key:
             gemini_key = st.text_input(
-                "Enter Gemini API Key",
+                "Gemini API key",
                 type="password",
-                help="Create a free key in Google AI Studio.",
+                placeholder="Paste your Google AI Studio key…",
             )
         else:
-            st.success("Gemini API key loaded from secrets.")
-    elif llm_provider == "DeepSeek":
-        if not deepseek_key:
-            deepseek_key = st.text_input(
-                "Enter DeepSeek API Key",
+            st.success("Gemini key loaded from secrets.")
+    else:
+        if not hf_key:
+            hf_key = st.text_input(
+                "HuggingFace API token",
                 type="password",
-                help="Get an API key from platform.deepseek.com.",
+                placeholder="Paste your HF token (huggingface.co/settings/tokens)…",
             )
         else:
-            st.success("DeepSeek API key loaded from secrets.")
+            st.success("HuggingFace token loaded from secrets.")
 
-    st.header("2. Documents")
+    st.markdown("### Documents")
     uploaded_files = st.file_uploader(
-        "Upload document files",
+        "Drop files here or click to browse",
         type=["pdf", "docx", "txt", "csv", "xlsx", "xls"],
         accept_multiple_files=True,
-        help="Upload PDFs, Word docs, text files, CSVs, or spreadsheets.",
+        label_visibility="collapsed",
     )
     st.caption(
-        f"Limits: {MAX_FILE_SIZE_MB} MB per file, {MAX_TOTAL_UPLOAD_MB} MB total. "
-        "Larger files may be slow or fail on free hosting tiers."
+        f"Up to {MAX_FILE_SIZE_MB} MB per file · {MAX_TOTAL_UPLOAD_MB} MB total"
     )
 
-    st.header("3. Retrieval")
+    st.markdown("### Retrieval")
     use_hybrid_search = st.toggle("Hybrid BM25 + FAISS", value=True)
     use_reranker = st.toggle("Cross-encoder reranking", value=True)
     use_query_expansion = st.toggle(
         "Query expansion",
         value=False,
-        disabled=llm_provider != "Gemini",
-        help="Gemini-only. Uses one extra Gemini request per question. Keep this off on the free tier unless you need broader retrieval.",
+        help="Generates extra query variants using the LLM — one extra API call per question.",
     )
-    if llm_provider != "Gemini":
-        use_query_expansion = False
     top_k_context = st.slider("Cited chunks", 2, 8, TOP_K_CONTEXT)
-    show_diagnostics = st.toggle("Show retrieval diagnostics", value=False)
+    show_diagnostics = st.toggle("Retrieval diagnostics", value=False)
 
 
+# ── Cached model loaders ───────────────────────────────────────────────────
 @st.cache_resource
 def load_embedding_model():
     return SentenceTransformer(EMBEDDING_MODEL_NAME)
@@ -148,6 +346,7 @@ def load_reranker():
     return CrossEncoder(RERANKER_MODEL_NAME)
 
 
+# ── Utilities ──────────────────────────────────────────────────────────────
 def ensure_storage_dirs():
     CACHE_DIR.mkdir(exist_ok=True)
     CHAT_DIR.mkdir(exist_ok=True)
@@ -173,12 +372,7 @@ def chat_history_path(signature):
 
 
 def default_chat_message():
-    return [
-        {
-            "role": "assistant",
-            "content": "I indexed your documents with FAISS. Ask me anything about them.",
-        }
-    ]
+    return [{"role": "assistant", "content": "Documents indexed. Ask me anything about them."}]
 
 
 def load_chat_history(signature):
@@ -187,7 +381,7 @@ def load_chat_history(signature):
         return default_chat_message()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(data, list) and all(isinstance(item, dict) and "role" in item for item in data):
+        if isinstance(data, list) and all(isinstance(m, dict) and "role" in m for m in data):
             return data
         return default_chat_message()
     except Exception:
@@ -198,20 +392,19 @@ def save_chat_history(signature, messages):
     try:
         ensure_storage_dirs()
         chat_history_path(signature).write_text(
-            json.dumps(messages, indent=2, ensure_ascii=False),
-            encoding="utf-8",
+            json.dumps(messages, indent=2, ensure_ascii=False), encoding="utf-8"
         )
     except Exception as exc:
-        st.warning(f"Could not save chat history to disk: {exc}")
+        st.warning(f"Could not save chat history: {exc}")
 
 
 def export_chat_markdown(messages):
     lines = ["# RAG Chat Export", ""]
-    for message in messages:
-        role = message.get("role", "message").title()
-        lines.extend([f"## {role}", "", message.get("content", ""), ""])
-        if message.get("sources"):
-            lines.extend(["### Sources", "", message["sources"], ""])
+    for m in messages:
+        role = m.get("role", "message").title()
+        lines.extend([f"## {role}", "", m.get("content", ""), ""])
+        if m.get("sources"):
+            lines.extend(["### Sources", "", m["sources"], ""])
     return "\n".join(lines)
 
 
@@ -231,24 +424,22 @@ def make_source_label(metadata):
     return label
 
 
+# ── Document parsing ───────────────────────────────────────────────────────
 def dataframe_to_sections(dataframe, filename, sheet_name=None, rows_per_section=40):
     sections = []
     total_rows = len(dataframe)
     if total_rows == 0:
-        metadata = {"source": filename, "type": "spreadsheet", "sheet": sheet_name, "row_range": "empty"}
-        sections.append({"text": dataframe.to_string(index=False), "metadata": metadata})
+        sections.append({
+            "text": dataframe.to_string(index=False),
+            "metadata": {"source": filename, "type": "spreadsheet", "sheet": sheet_name, "row_range": "empty"},
+        })
         return sections
-
     for start in range(0, total_rows, rows_per_section):
         end = min(start + rows_per_section, total_rows)
-        subset = dataframe.iloc[start:end]
-        metadata = {
-            "source": filename,
-            "type": "spreadsheet",
-            "sheet": sheet_name,
-            "row_range": f"{start + 1}-{end}",
-        }
-        sections.append({"text": subset.to_string(index=False), "metadata": metadata})
+        sections.append({
+            "text": dataframe.iloc[start:end].to_string(index=False),
+            "metadata": {"source": filename, "type": "spreadsheet", "sheet": sheet_name, "row_range": f"{start + 1}-{end}"},
+        })
     return sections
 
 
@@ -269,17 +460,9 @@ def extract_sections_from_file(file):
                 except Exception:
                     continue
                 if text and text.strip():
-                    sections.append(
-                        {
-                            "text": text,
-                            "metadata": {"source": name, "type": "pdf", "page": page_number},
-                        }
-                    )
+                    sections.append({"text": text, "metadata": {"source": name, "type": "pdf", "page": page_number}})
             if not sections:
-                st.warning(
-                    f"No extractable text found in {name}. It may be a scanned/image-only PDF "
-                    "that would need OCR."
-                )
+                st.warning(f"No extractable text in {name}. May be a scanned PDF.")
             return sections
 
         if lower_name.endswith(".docx"):
@@ -287,16 +470,10 @@ def extract_sections_from_file(file):
             paragraphs = [p.text.strip() for p in document.paragraphs if p.text.strip()]
             for start in range(0, len(paragraphs), 20):
                 end = min(start + 20, len(paragraphs))
-                sections.append(
-                    {
-                        "text": "\n".join(paragraphs[start:end]),
-                        "metadata": {
-                            "source": name,
-                            "type": "docx",
-                            "paragraph_range": f"{start + 1}-{end}",
-                        },
-                    }
-                )
+                sections.append({
+                    "text": "\n".join(paragraphs[start:end]),
+                    "metadata": {"source": name, "type": "docx", "paragraph_range": f"{start + 1}-{end}"},
+                })
             return sections
 
         if lower_name.endswith(".txt"):
@@ -331,36 +508,27 @@ def extract_sections_from_file(file):
     return sections
 
 
+# ── Chunking ───────────────────────────────────────────────────────────────
 def recursive_split_text(text, metadata, chunk_size=1000, overlap=200):
     separators = ["\n\n", "\n", ". ", " ", ""]
 
     def split_recursive(text_to_split, separators_list):
         if len(text_to_split) <= chunk_size:
             return [text_to_split.strip()]
-
         separator = separators_list[0]
         next_separators = separators_list[1:]
-
         if not next_separators:
             step = max(1, chunk_size - overlap)
-            return [
-                text_to_split[i : i + chunk_size].strip()
-                for i in range(0, len(text_to_split), step)
-            ]
-
+            return [text_to_split[i: i + chunk_size].strip() for i in range(0, len(text_to_split), step)]
         pieces = text_to_split.split(separator)
-        chunks = []
-        current = ""
-
+        chunks, current = [], ""
         for piece in pieces:
             candidate = f"{current}{separator}{piece}" if current else piece
             if len(candidate) <= chunk_size:
                 current = candidate
                 continue
-
             if current:
                 chunks.append(current.strip())
-
             if len(piece) > chunk_size:
                 chunks.extend(split_recursive(piece, next_separators))
                 current = ""
@@ -369,24 +537,22 @@ def recursive_split_text(text, metadata, chunk_size=1000, overlap=200):
                 prefix = previous[-overlap:] if previous else ""
                 candidate = f"{prefix}{separator}{piece}" if prefix else piece
                 current = candidate if len(candidate) <= chunk_size else piece
-
         if current:
             chunks.append(current.strip())
+        return [c for c in chunks if c]
 
-        return [chunk for chunk in chunks if chunk]
-
-    raw_chunks = [chunk for chunk in split_recursive(text, separators) if chunk and chunk.strip()]
+    raw_chunks = [c for c in split_recursive(text, separators) if c and c.strip()]
     source = metadata.get("source", "document")
     return [
         {
-            "id": f"{source}::chunk-{index + 1}::{hashlib.sha1(chunk.encode('utf-8', errors='ignore')).hexdigest()[:8]}",
-            "text": chunk,
+            "id": f"{source}::chunk-{i + 1}::{hashlib.sha1(c.encode('utf-8', errors='ignore')).hexdigest()[:8]}",
+            "text": c,
             "source": source,
             "source_label": make_source_label(metadata),
-            "chunk_number": index + 1,
+            "chunk_number": i + 1,
             "metadata": metadata.copy(),
         }
-        for index, chunk in enumerate(raw_chunks)
+        for i, c in enumerate(raw_chunks)
     ]
 
 
@@ -394,6 +560,7 @@ def tokenize(text):
     return re.findall(r"[a-zA-Z0-9]+", text.lower())
 
 
+# ── FAISS index ────────────────────────────────────────────────────────────
 def build_faiss_index(embeddings):
     normalized = embeddings.astype("float32")
     faiss.normalize_L2(normalized)
@@ -404,10 +571,7 @@ def build_faiss_index(embeddings):
 
 def cache_paths(signature):
     base = CACHE_DIR / signature
-    return {
-        "index": base.with_suffix(".faiss"),
-        "metadata": base.with_suffix(".pkl"),
-    }
+    return {"index": base.with_suffix(".faiss"), "metadata": base.with_suffix(".pkl")}
 
 
 def remove_index_cache(signature):
@@ -423,20 +587,12 @@ def save_index_cache(signature, index, chunks, embeddings, file_stats):
         faiss.write_index(index, str(paths["index"]))
         with paths["metadata"].open("wb") as handle:
             pickle.dump(
-                {
-                    "chunks": chunks,
-                    "embeddings": embeddings,
-                    "file_stats": file_stats,
-                    "created_at": time.time(),
-                    "parser_version": PARSER_VERSION,
-                },
+                {"chunks": chunks, "embeddings": embeddings, "file_stats": file_stats,
+                 "created_at": time.time(), "parser_version": PARSER_VERSION},
                 handle,
             )
     except Exception as exc:
-        st.warning(
-            f"Could not write the index cache to disk ({exc}). "
-            "The app will still work this session but will need to re-index next time."
-        )
+        st.warning(f"Could not write index cache ({exc}). Will re-index next session.")
 
 
 def load_index_cache(signature):
@@ -446,14 +602,14 @@ def load_index_cache(signature):
     try:
         index = faiss.read_index(str(paths["index"]))
         with paths["metadata"].open("rb") as handle:
-            metadata = pickle.load(handle)
-        if metadata.get("parser_version") != PARSER_VERSION:
+            meta = pickle.load(handle)
+        if meta.get("parser_version") != PARSER_VERSION:
             return None
         return {
             "faiss_index": index,
-            "chunks": metadata["chunks"],
-            "embeddings": metadata["embeddings"],
-            "file_stats": metadata["file_stats"],
+            "chunks": meta["chunks"],
+            "embeddings": meta["embeddings"],
+            "file_stats": meta["file_stats"],
             "loaded_from_cache": True,
         }
     except Exception:
@@ -463,10 +619,11 @@ def load_index_cache(signature):
 def build_document_index(files, model, signature):
     cached = load_index_cache(signature)
     if cached:
+        chunks = cached["chunks"]
+        cached["bm25"] = BM25Okapi([tokenize(c["text"]) for c in chunks])
         return cached
 
-    chunks = []
-    file_stats = []
+    chunks, file_stats = [], []
     for file in files:
         sections = extract_sections_from_file(file)
         file_chunks = []
@@ -478,34 +635,30 @@ def build_document_index(files, model, signature):
         if len(file_chunks) > MAX_CHUNKS_PER_FILE:
             file_chunks = file_chunks[:MAX_CHUNKS_PER_FILE]
             truncated = True
-            st.warning(
-                f"{file.name} produced more than {MAX_CHUNKS_PER_FILE} chunks. "
-                "Only the first portion was indexed to keep the app responsive."
-            )
+            st.warning(f"{file.name} exceeded {MAX_CHUNKS_PER_FILE} chunks — first portion indexed only.")
 
         chunks.extend(file_chunks)
         if file_chunks:
-            file_stats.append(
-                {
-                    "name": file.name,
-                    "size": f"{file.size / 1024:.1f} KB",
-                    "chunks": len(file_chunks),
-                    "sections": len(sections),
-                    "truncated": truncated,
-                }
-            )
+            file_stats.append({
+                "name": file.name,
+                "size": f"{file.size / 1024:.1f} KB",
+                "chunks": len(file_chunks),
+                "sections": len(sections),
+                "truncated": truncated,
+            })
 
     if not chunks:
         return None
 
-    texts = [chunk["text"] for chunk in chunks]
     try:
-        embeddings = model.encode(texts, show_progress_bar=False)
+        embeddings = model.encode([c["text"] for c in chunks], show_progress_bar=False)
     except Exception as exc:
-        st.error(f"Failed to generate embeddings for the uploaded documents: {exc}")
+        st.error(f"Failed to generate embeddings: {exc}")
         st.stop()
+
     embeddings = np.asarray(embeddings, dtype="float32")
     index = build_faiss_index(embeddings)
+    bm25 = BM25Okapi([tokenize(c["text"]) for c in chunks])
     save_index_cache(signature, index, chunks, embeddings, file_stats)
 
     return {
@@ -513,71 +666,90 @@ def build_document_index(files, model, signature):
         "chunks": chunks,
         "embeddings": embeddings,
         "file_stats": file_stats,
+        "bm25": bm25,
         "loaded_from_cache": False,
     }
 
 
-def expand_query(query):
-    if not getattr(genai, "_configured_for_expansion", False):
-        return [query]
-    prompt = f"""Rewrite this search query into three short retrieval queries.
-Keep the original meaning and include synonyms or related terms only when useful.
-Return one query per line.
-
-Query: {query}"""
-    try:
-        response = genai.GenerativeModel(GEMINI_MODEL_NAME).generate_content(prompt)
-        expansions = [
-            line.strip("-* 0123456789.").strip()
-            for line in response.text.splitlines()
-            if line.strip()
-        ]
-        return [query] + expansions[:3]
-    except Exception:
-        return [query]
+# ── Query expansion ────────────────────────────────────────────────────────
+def _expansion_prompt(query):
+    return (
+        "Rewrite this search query into three short retrieval queries.\n"
+        "Keep the original meaning. Return one query per line, no bullets or numbers.\n\n"
+        f"Query: {query}"
+    )
 
 
-def retrieve_candidates(query, model, document_index, use_hybrid, use_expansion):
+def _parse_expansions(text, original):
+    expansions = [line.strip("-* 0123456789.").strip() for line in text.splitlines() if line.strip()]
+    return [original] + expansions[:3]
+
+
+def _hf_json_request(prompt, api_token, timeout=30):
+    payload = json.dumps({
+        "model": HF_MODEL_NAME,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+        "max_tokens": 256,
+    }).encode("utf-8")
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_token}"}
+    req = urllib.request.Request(HF_ENDPOINT, data=payload, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read())
+
+
+def expand_query(query, provider, gemini_ready=False, hf_key=None):
+    if provider == "Gemini" and gemini_ready:
+        try:
+            response = genai.GenerativeModel(GEMINI_MODEL_NAME).generate_content(_expansion_prompt(query))
+            return _parse_expansions(response.text, query)
+        except Exception:
+            return [query]
+
+    if provider == "HuggingFace" and hf_key:
+        try:
+            data = _hf_json_request(_expansion_prompt(query), hf_key)
+            return _parse_expansions(data["choices"][0]["message"]["content"], query)
+        except Exception:
+            return [query]
+
+    return [query]
+
+
+# ── Retrieval ──────────────────────────────────────────────────────────────
+def retrieve_candidates(query, model, document_index, use_hybrid, use_expansion,
+                        provider=None, gemini_ready=False, hf_key=None):
     chunks = document_index["chunks"]
-    queries = expand_query(query) if use_expansion else [query]
+    queries = (
+        expand_query(query, provider, gemini_ready, hf_key) if use_expansion else [query]
+    )
     candidate_scores = {}
 
     for expanded_query in queries:
         query_embedding = np.asarray([model.encode(expanded_query)], dtype="float32")
         faiss.normalize_L2(query_embedding)
         distances, indices = document_index["faiss_index"].search(
-            query_embedding,
-            min(TOP_K_RETRIEVAL, len(chunks)),
+            query_embedding, min(TOP_K_RETRIEVAL, len(chunks))
         )
-
         for score, index in zip(distances[0], indices[0]):
             if index == -1:
                 continue
-            details = candidate_scores.setdefault(
-                index,
-                {"index": index, "semantic": 0.0, "bm25": 0.0, "combined": 0.0},
-            )
-            details["semantic"] = max(details["semantic"], float(score))
+            d = candidate_scores.setdefault(index, {"index": index, "semantic": 0.0, "bm25": 0.0, "combined": 0.0})
+            d["semantic"] = max(d["semantic"], float(score))
 
     if use_hybrid:
-        tokenized_chunks = [tokenize(chunk["text"]) for chunk in chunks]
-        bm25 = BM25Okapi(tokenized_chunks)
+        bm25 = document_index.get("bm25") or BM25Okapi([tokenize(c["text"]) for c in chunks])
         bm25_scores = bm25.get_scores(tokenize(query))
         if np.max(bm25_scores) > 0:
             bm25_scores = bm25_scores / np.max(bm25_scores)
-        top_bm25_indices = np.argsort(bm25_scores)[-TOP_K_RETRIEVAL:][::-1]
-        for index in top_bm25_indices:
-            details = candidate_scores.setdefault(
-                int(index),
-                {"index": int(index), "semantic": 0.0, "bm25": 0.0, "combined": 0.0},
-            )
-            details["bm25"] = max(details["bm25"], float(bm25_scores[index]))
+        for index in np.argsort(bm25_scores)[-TOP_K_RETRIEVAL:][::-1]:
+            d = candidate_scores.setdefault(int(index), {"index": int(index), "semantic": 0.0, "bm25": 0.0, "combined": 0.0})
+            d["bm25"] = max(d["bm25"], float(bm25_scores[index]))
 
-    for details in candidate_scores.values():
-        details["combined"] = details["semantic"] + (0.35 * details["bm25"])
+    for d in candidate_scores.values():
+        d["combined"] = d["semantic"] + (0.35 * d["bm25"])
 
-    ranked = sorted(candidate_scores.values(), key=lambda item: item["combined"], reverse=True)
-    return ranked[:TOP_K_RETRIEVAL]
+    return sorted(candidate_scores.values(), key=lambda x: x["combined"], reverse=True)[:TOP_K_RETRIEVAL]
 
 
 def rerank_candidates(query, candidates, chunks):
@@ -585,20 +757,18 @@ def rerank_candidates(query, candidates, chunks):
         return []
     try:
         reranker = load_reranker()
-        pairs = [(query, chunks[candidate["index"]]["text"]) for candidate in candidates]
+        pairs = [(query, chunks[c["index"]]["text"]) for c in candidates]
         scores = reranker.predict(pairs)
-        for candidate, score in zip(candidates, scores):
-            candidate["rerank"] = float(score)
-        return sorted(candidates, key=lambda item: item.get("rerank", item["combined"]), reverse=True)
+        for c, score in zip(candidates, scores):
+            c["rerank"] = float(score)
+        return sorted(candidates, key=lambda x: x.get("rerank", x["combined"]), reverse=True)
     except Exception as exc:
-        st.warning(f"Reranking failed, falling back to retrieval scores: {exc}")
-        return sorted(candidates, key=lambda item: item["combined"], reverse=True)
+        st.warning(f"Reranking failed, using retrieval scores: {exc}")
+        return sorted(candidates, key=lambda x: x["combined"], reverse=True)
 
 
 def build_context(selected_candidates, chunks):
-    context_parts = []
-    source_parts = []
-    diagnostics = []
+    context_parts, source_parts, diagnostics = [], [], []
     for rank, candidate in enumerate(selected_candidates, start=1):
         chunk = chunks[candidate["index"]]
         citation_id = f"{chunk['source_label']} - chunk {chunk['chunk_number']}"
@@ -606,104 +776,97 @@ def build_context(selected_candidates, chunks):
         snippet = chunk["text"].strip()
         if len(snippet) > 900:
             snippet = f"{snippet[:900]}..."
-        score_text = f"semantic={candidate.get('semantic', 0):.3f}, bm25={candidate.get('bm25', 0):.3f}, combined={candidate.get('combined', 0):.3f}"
+        score_text = (
+            f"semantic={candidate.get('semantic', 0):.3f}, "
+            f"bm25={candidate.get('bm25', 0):.3f}, "
+            f"combined={candidate.get('combined', 0):.3f}"
+        )
         if "rerank" in candidate:
             score_text += f", rerank={candidate['rerank']:.3f}"
         source_parts.append(f"**[{rank}] {citation_id}**\n\nScore: {score_text}\n\n> {snippet}")
-        diagnostics.append(
-            {
-                "rank": rank,
-                "source": citation_id,
-                "semantic": round(candidate.get("semantic", 0), 4),
-                "bm25": round(candidate.get("bm25", 0), 4),
-                "combined": round(candidate.get("combined", 0), 4),
-                "rerank": round(candidate["rerank"], 4) if "rerank" in candidate else None,
-            }
-        )
+        diagnostics.append({
+            "rank": rank,
+            "source": citation_id,
+            "semantic": round(candidate.get("semantic", 0), 4),
+            "bm25": round(candidate.get("bm25", 0), 4),
+            "combined": round(candidate.get("combined", 0), 4),
+            "rerank": round(candidate["rerank"], 4) if "rerank" in candidate else None,
+        })
     return "\n\n---\n\n".join(context_parts), "\n\n---\n\n".join(source_parts), diagnostics
 
 
 def recent_conversation(messages, max_messages=6):
-    recent = messages[-max_messages:]
     return "\n".join(
-        f"{message.get('role', 'user').title()}: {message.get('content', '')}" for message in recent
+        f"{m.get('role', 'user').title()}: {m.get('content', '')}"
+        for m in messages[-max_messages:]
     )
 
 
+# ── LLM streaming ──────────────────────────────────────────────────────────
 def stream_gemini_response(prompt):
     model = genai.GenerativeModel(GEMINI_MODEL_NAME)
-    response_stream = model.generate_content(
-        prompt,
-        stream=True,
-        request_options={"timeout": 120},
-    )
-    for chunk in response_stream:
+    for chunk in model.generate_content(prompt, stream=True, request_options={"timeout": 120}):
         text = getattr(chunk, "text", "")
         if text:
             yield text
 
 
-def stream_deepseek_response(prompt, api_key):
-    endpoint = "https://api.deepseek.com/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
+def stream_hf_response(prompt, api_token):
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_token}"}
     payload = json.dumps({
-        "model": DEEPSEEK_MODEL_NAME,
+        "model": HF_MODEL_NAME,
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
-        "temperature": 0.2
+        "temperature": 0.2,
+        "max_tokens": 2048,
     }).encode("utf-8")
-    request = urllib.request.Request(endpoint, data=payload, headers=headers)
-    with urllib.request.urlopen(request, timeout=120) as response:
-        for line in response:
+    req = urllib.request.Request(HF_ENDPOINT, data=payload, headers=headers)
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        for line in resp:
             line_str = line.decode("utf-8").strip()
-            if not line_str:
+            if not line_str or not line_str.startswith("data: "):
                 continue
-            if line_str.startswith("data: "):
-                data_content = line_str[6:]
-                if data_content == "[DONE]":
-                    break
-                try:
-                    data = json.loads(data_content)
-                    choices = data.get("choices", [])
-                    if choices:
-                        delta = choices[0].get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            yield content
-                except Exception:
-                    continue
+            data_content = line_str[6:]
+            if data_content == "[DONE]":
+                break
+            try:
+                data = json.loads(data_content)
+                content = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                if content:
+                    yield content
+            except Exception:
+                continue
 
 
 def stream_llm_response(prompt, provider, **kwargs):
     if provider == "Gemini":
         yield from stream_gemini_response(prompt)
-    elif provider == "DeepSeek":
-        yield from stream_deepseek_response(prompt, kwargs["deepseek_key"])
+    elif provider == "HuggingFace":
+        yield from stream_hf_response(prompt, kwargs["hf_key"])
 
 
 def friendly_llm_error(error, provider):
-    message = str(error)
-    lower_message = message.lower()
+    msg = str(error)
+    low = msg.lower()
     if provider == "Gemini":
-        if "429" in message or "quota" in lower_message or "rate" in lower_message:
-            retry_match = re.search(r"retry[_ ]delay\s*\{\s*seconds:\s*(\d+)", message, re.IGNORECASE)
-            retry_seconds = retry_match.group(1) if retry_match else "30"
+        if "429" in msg or "quota" in low or "rate" in low:
+            m = re.search(r"retry[_ ]delay\s*\{\s*seconds:\s*(\d+)", msg, re.IGNORECASE)
+            secs = m.group(1) if m else "30"
             return (
-                f"Gemini is rate-limiting the free tier right now. "
-                f"Please wait about {retry_seconds} seconds and ask again. "
-                "Tip: keep Query expansion turned off to use only one Gemini request per answer."
+                f"Gemini rate limit hit (free tier). Wait ~{secs}s then retry. "
+                "Tip: turn off Query expansion to reduce API calls. "
+                "Or switch to HuggingFace in the sidebar."
             )
-        return f"Error calling Gemini API: {message}"
-    elif provider == "DeepSeek":
-        if "401" in message:
-            return "DeepSeek authentication failed. Please check if your API key is correct and has sufficient balance."
-        if "429" in message:
-            return "DeepSeek API rate limit exceeded. Please wait a moment before trying again."
-        return f"Error calling DeepSeek API: {message}"
-    return f"Error: {message}"
+        return f"Gemini error: {msg}"
+    if provider == "HuggingFace":
+        if "401" in msg:
+            return "HuggingFace auth failed — check your token at huggingface.co/settings/tokens."
+        if "429" in msg or "rate" in low:
+            return "HuggingFace rate limit hit (free tier allows ~few hundred req/hr). Wait a moment and retry."
+        if "503" in msg or "loading" in low:
+            return "HuggingFace model is loading (cold start). Wait ~30s and try again."
+        return f"HuggingFace error: {msg}"
+    return f"Error: {msg}"
 
 
 def build_prompt(messages, context, query):
@@ -711,7 +874,7 @@ def build_prompt(messages, context, query):
 Answer the user's question using only the provided document context.
 Use concise, professional language.
 Add inline citations like [1] or [2] when you use evidence.
-If the answer is not supported by the context, say that the documents do not contain enough information.
+If the answer is not supported by the context, say the documents do not contain enough information.
 
 Recent conversation:
 {recent_conversation(messages)}
@@ -725,191 +888,245 @@ Question:
 Answer:"""
 
 
+# ── Upload validation ──────────────────────────────────────────────────────
 def validate_uploads(files):
     oversized = [f.name for f in files if f.size > MAX_FILE_SIZE_MB * 1024 * 1024]
     total_mb = sum(f.size for f in files) / (1024 * 1024)
     errors = []
     if oversized:
-        errors.append(
-            f"These files exceed the {MAX_FILE_SIZE_MB} MB per-file limit and were skipped: "
-            + ", ".join(oversized)
-        )
+        errors.append(f"Files over {MAX_FILE_SIZE_MB} MB limit (skipped): " + ", ".join(oversized))
     if total_mb > MAX_TOTAL_UPLOAD_MB:
-        errors.append(
-            f"Total upload size is {total_mb:.1f} MB, which exceeds the {MAX_TOTAL_UPLOAD_MB} MB limit. "
-            "Please upload fewer or smaller files."
-        )
+        errors.append(f"Total upload {total_mb:.1f} MB exceeds {MAX_TOTAL_UPLOAD_MB} MB limit.")
     accepted = [f for f in files if f.size <= MAX_FILE_SIZE_MB * 1024 * 1024]
     return accepted, errors
 
 
-if llm_provider == "Gemini" and not gemini_key:
-    st.warning("Please enter your Google Gemini API key in the sidebar to get started.")
-elif llm_provider == "Gemini":
+# ── State ──────────────────────────────────────────────────────────────────
+gemini_ready = llm_provider == "Gemini" and bool(gemini_key)
+hf_ready = llm_provider == "HuggingFace" and bool(hf_key)
+api_ready = gemini_ready or hf_ready
+
+if gemini_ready:
     genai.configure(api_key=gemini_key)
-    genai._configured_for_expansion = True
-elif llm_provider == "DeepSeek" and not deepseek_key:
-    st.warning("Please enter your DeepSeek API key in the sidebar to get started.")
 
-if (llm_provider == "Gemini" and gemini_key) or (llm_provider == "DeepSeek" and deepseek_key):
-    if uploaded_files:
-        uploaded_files, upload_errors = validate_uploads(uploaded_files)
-        for error_message in upload_errors:
-            st.error(error_message)
-        if not uploaded_files:
-            st.stop()
 
-        ensure_storage_dirs()
-        signature = file_signature(uploaded_files)
+# ── Main area ──────────────────────────────────────────────────────────────
+if not api_ready:
+    st.markdown(
+        """
+        <div class="welcome-wrap">
+            <div class="welcome-icon">🔍</div>
+            <div class="welcome-title">RAG Analyzer</div>
+            <div class="welcome-sub">
+                Enter your API key in the sidebar to get started.<br>
+                Choose <strong>Gemini</strong> (Google AI Studio — free tier) or
+                <strong>HuggingFace</strong> (free serverless inference, no credit card needed).
+            </div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-card-title">Hybrid Retrieval</div>
+                    <div class="feature-card-desc">FAISS + BM25 with cross-encoder reranking</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">Zero Cost</div>
+                    <div class="feature-card-desc">Local embeddings · Free Gemini or HuggingFace</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">Multi-format</div>
+                    <div class="feature-card-desc">PDF, Word, TXT, CSV, and Excel</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">Cited Answers</div>
+                    <div class="feature-card-desc">Page-aware citations from every chunk</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        if st.sidebar.button("Clear chat history", width="stretch"):
-            st.session_state["messages"] = default_chat_message()
-            save_chat_history(signature, st.session_state["messages"])
-            st.rerun()
+elif not uploaded_files:
+    st.markdown(
+        """
+        <div class="welcome-wrap">
+            <div class="welcome-icon">📂</div>
+            <div class="welcome-title">Upload your documents</div>
+            <div class="welcome-sub">
+                Use the <strong>Documents</strong> section in the sidebar to upload files.
+                Then ask questions and get grounded, cited answers.
+            </div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-card-title">PDF</div>
+                    <div class="feature-card-desc">Page-by-page extraction with page citations</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">DOCX</div>
+                    <div class="feature-card-desc">Paragraph-range extraction</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">CSV / Excel</div>
+                    <div class="feature-card-desc">Row-range chunking, sheet-aware</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-card-title">TXT</div>
+                    <div class="feature-card-desc">UTF-8 and Latin-1 encoding fallback</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        if st.sidebar.button("Rebuild index cache", width="stretch"):
-            remove_index_cache(signature)
-            st.session_state.pop("file_signature", None)
-            st.session_state.pop("document_index", None)
-            st.rerun()
+else:
+    uploaded_files, upload_errors = validate_uploads(uploaded_files)
+    for err in upload_errors:
+        st.error(err)
+    if not uploaded_files:
+        st.stop()
 
-        with st.spinner("Loading local embedding model..."):
-            embedding_model = load_embedding_model()
+    ensure_storage_dirs()
+    signature = file_signature(uploaded_files)
 
-        if st.session_state.get("file_signature") != signature:
-            with st.spinner("Indexing documents with FAISS..."):
-                document_index = build_document_index(uploaded_files, embedding_model, signature)
-                if not document_index:
-                    st.error("No extractable text was found in the uploaded files.")
-                    st.stop()
-                st.session_state["document_index"] = document_index
-                st.session_state["file_signature"] = signature
-                st.session_state["messages"] = load_chat_history(signature)
+    with st.sidebar:
+        st.markdown("### Session")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Clear chat", use_container_width=True):
+                st.session_state["messages"] = default_chat_message()
+                save_chat_history(signature, st.session_state["messages"])
+                st.rerun()
+        with col_b:
+            if st.button("Rebuild index", use_container_width=True):
+                remove_index_cache(signature)
+                st.session_state.pop("file_signature", None)
+                st.session_state.pop("document_index", None)
+                st.rerun()
 
-        document_index = st.session_state["document_index"]
-        chunks = document_index["chunks"]
+    with st.spinner("Loading embedding model…"):
+        embedding_model = load_embedding_model()
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Documents", len(uploaded_files))
-        col2.metric("Chunks", len(chunks))
-        col3.metric("Vector Search", "FAISS")
-        col4.metric("Index Status", "Cached" if document_index["loaded_from_cache"] else "Fresh")
-        col5.metric("Answer Model", llm_provider.split()[0])
-
-        with st.expander("Processed files and statistics", expanded=False):
-            for stat in document_index.get("file_stats", []):
-                safe_name = html.escape(str(stat["name"]))
-                truncated_note = (
-                    ' <span style="color:#b45309;">(truncated)</span>' if stat.get("truncated") else ""
-                )
-                st.markdown(
-                    f"""
-                    <div class="doc-card">
-                        <strong>{safe_name}</strong>{truncated_note} &nbsp;|&nbsp; Size:
-                        <code>{stat['size']}</code> &nbsp;|&nbsp; Sections:
-                        <code>{stat['sections']}</code> &nbsp;|&nbsp; Chunks:
-                        <code>{stat['chunks']}</code>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        if "messages" not in st.session_state:
+    if st.session_state.get("file_signature") != signature:
+        with st.spinner("Indexing documents…"):
+            document_index = build_document_index(uploaded_files, embedding_model, signature)
+            if not document_index:
+                st.error("No extractable text found in the uploaded files.")
+                st.stop()
+            st.session_state["document_index"] = document_index
+            st.session_state["file_signature"] = signature
             st.session_state["messages"] = load_chat_history(signature)
 
-        st.download_button(
-            "Download chat transcript",
-            data=export_chat_markdown(st.session_state["messages"]),
-            file_name="rag_chat_transcript.md",
-            mime="text/markdown",
-        )
+    document_index = st.session_state["document_index"]
+    chunks = document_index["chunks"]
 
-        for message in st.session_state["messages"]:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-                if message.get("sources"):
-                    with st.expander("Sources and citations", expanded=False):
-                        st.markdown(message["sources"])
-                if show_diagnostics and message.get("diagnostics"):
-                    with st.expander("Retrieval diagnostics", expanded=False):
-                        st.dataframe(pd.DataFrame(message["diagnostics"]), width="stretch")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Documents", len(uploaded_files))
+    c2.metric("Chunks", len(chunks))
+    c3.metric("Search", "Hybrid" if use_hybrid_search else "FAISS")
+    c4.metric("Index", "Cached" if document_index["loaded_from_cache"] else "Fresh")
+    c5.metric("Model", llm_provider)
 
-        if user_query := st.chat_input("Ask a question across all documents..."):
-            st.session_state["messages"].append({"role": "user", "content": user_query})
-            save_chat_history(signature, st.session_state["messages"])
-
-            with st.chat_message("user"):
-                st.write(user_query)
-
-            with st.spinner("Retrieving and ranking evidence..."):
-                relevant_context, sources_string, diagnostics = "", "", []
-                try:
-                    candidates = retrieve_candidates(
-                        user_query,
-                        embedding_model,
-                        document_index,
-                        use_hybrid_search,
-                        use_query_expansion,
-                    )
-                    if use_reranker:
-                        candidates = rerank_candidates(user_query, candidates, chunks)
-                    selected_candidates = candidates[:top_k_context]
-                    relevant_context, sources_string, diagnostics = build_context(
-                        selected_candidates, chunks
-                    )
-                except Exception as exc:
-                    st.error(f"Retrieval failed, answering without document context: {exc}")
-
-            prompt = build_prompt(st.session_state["messages"], relevant_context, user_query)
-
-            with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-                streamed_text = ""
-                error_note = None
-                for attempt in range(LLM_MAX_RETRIES + 1):
-                    streamed_text = ""
-                    try:
-                        llm_kwargs = {}
-                        if llm_provider == "DeepSeek":
-                            llm_kwargs = {"deepseek_key": deepseek_key}
-                        for text_chunk in stream_llm_response(prompt, llm_provider, **llm_kwargs):
-                            streamed_text += text_chunk
-                            message_placeholder.markdown(streamed_text)
-                        error_note = None
-                        break
-                    except Exception as exc:
-                        error_note = exc
-                        is_transient = "429" not in str(exc) and "quota" not in str(exc).lower()
-                        if attempt < LLM_MAX_RETRIES and is_transient:
-                            time.sleep(LLM_RETRY_BASE_DELAY_SECONDS * (attempt + 1))
-                            continue
-                        break
-
-                if error_note is not None:
-                    error_message = friendly_llm_error(error_note, llm_provider)
-                    if streamed_text.strip():
-                        streamed_text = (
-                            f"{streamed_text}\n\n---\n*The response was cut off: {error_message}*"
-                        )
-                    else:
-                        streamed_text = error_message
-                    message_placeholder.markdown(streamed_text)
-
-                if sources_string:
-                    with st.expander("Sources and citations", expanded=False):
-                        st.markdown(sources_string)
-                if show_diagnostics and diagnostics:
-                    with st.expander("Retrieval diagnostics", expanded=False):
-                        st.dataframe(pd.DataFrame(diagnostics), width="stretch")
-
-            st.session_state["messages"].append(
-                {
-                    "role": "assistant",
-                    "content": streamed_text,
-                    "sources": sources_string,
-                    "diagnostics": diagnostics,
-                }
+    with st.expander("Indexed files", expanded=False):
+        for stat in document_index.get("file_stats", []):
+            safe_name = html.escape(str(stat["name"]))
+            truncated_note = ' <span style="color:#b45309;">(truncated)</span>' if stat.get("truncated") else ""
+            st.markdown(
+                f'<div class="doc-card"><strong>{safe_name}</strong>{truncated_note}'
+                f" &nbsp;·&nbsp; {stat['size']} &nbsp;·&nbsp; {stat['chunks']} chunks</div>",
+                unsafe_allow_html=True,
             )
-            save_chat_history(signature, st.session_state["messages"])
-    else:
-        st.info("Upload one or more document files in the sidebar to begin chatting.")
+
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = load_chat_history(signature)
+
+    st.download_button(
+        "Download transcript",
+        data=export_chat_markdown(st.session_state["messages"]),
+        file_name="rag_chat_transcript.md",
+        mime="text/markdown",
+    )
+
+    for message in st.session_state["messages"]:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+            if message.get("sources"):
+                with st.expander("Sources", expanded=False):
+                    st.markdown(message["sources"])
+            if show_diagnostics and message.get("diagnostics"):
+                with st.expander("Retrieval diagnostics", expanded=False):
+                    st.dataframe(pd.DataFrame(message["diagnostics"]), use_container_width=True)
+
+    if user_query := st.chat_input("Ask a question about your documents…"):
+        st.session_state["messages"].append({"role": "user", "content": user_query})
+        save_chat_history(signature, st.session_state["messages"])
+
+        with st.chat_message("user"):
+            st.write(user_query)
+
+        with st.spinner("Retrieving evidence…"):
+            relevant_context, sources_string, diagnostics = "", "", []
+            try:
+                candidates = retrieve_candidates(
+                    user_query,
+                    embedding_model,
+                    document_index,
+                    use_hybrid_search,
+                    use_query_expansion,
+                    provider=llm_provider,
+                    gemini_ready=gemini_ready,
+                    hf_key=hf_key if hf_ready else None,
+                )
+                if use_reranker:
+                    candidates = rerank_candidates(user_query, candidates, chunks)
+                selected_candidates = candidates[:top_k_context]
+                relevant_context, sources_string, diagnostics = build_context(selected_candidates, chunks)
+            except Exception as exc:
+                st.error(f"Retrieval failed: {exc}")
+
+        prompt = build_prompt(st.session_state["messages"], relevant_context, user_query)
+
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            streamed_text = ""
+            error_note = None
+            llm_kwargs = {"hf_key": hf_key} if llm_provider == "HuggingFace" else {}
+
+            for attempt in range(LLM_MAX_RETRIES + 1):
+                streamed_text = ""
+                try:
+                    for text_chunk in stream_llm_response(prompt, llm_provider, **llm_kwargs):
+                        streamed_text += text_chunk
+                        placeholder.markdown(streamed_text)
+                    error_note = None
+                    break
+                except Exception as exc:
+                    error_note = exc
+                    is_transient = "429" not in str(exc) and "quota" not in str(exc).lower()
+                    if attempt < LLM_MAX_RETRIES and is_transient:
+                        time.sleep(LLM_RETRY_BASE_DELAY_SECONDS * (attempt + 1))
+                        continue
+                    break
+
+            if error_note is not None:
+                err_msg = friendly_llm_error(error_note, llm_provider)
+                streamed_text = (
+                    f"{streamed_text}\n\n---\n*Response cut off: {err_msg}*"
+                    if streamed_text.strip()
+                    else err_msg
+                )
+                placeholder.markdown(streamed_text)
+
+            if sources_string:
+                with st.expander("Sources", expanded=False):
+                    st.markdown(sources_string)
+            if show_diagnostics and diagnostics:
+                with st.expander("Retrieval diagnostics", expanded=False):
+                    st.dataframe(pd.DataFrame(diagnostics), use_container_width=True)
+
+        st.session_state["messages"].append({
+            "role": "assistant",
+            "content": streamed_text,
+            "sources": sources_string,
+            "diagnostics": diagnostics,
+        })
+        save_chat_history(signature, st.session_state["messages"])

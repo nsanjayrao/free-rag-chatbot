@@ -1,8 +1,8 @@
-# Professional Multi-File RAG Analyzer
+# Multi-File RAG Analyzer
 
-A production-style RAG chatbot built with Streamlit, FAISS, SentenceTransformers, BM25, cross-encoder reranking, and Gemini. Upload PDF, DOCX, TXT, CSV, XLSX, or XLS files, then ask grounded questions with streaming answers and citations.
+A production-style RAG chatbot built with Streamlit, FAISS, SentenceTransformers, BM25, and cross-encoder reranking. Upload PDF, DOCX, TXT, CSV, XLSX, or XLS files and ask grounded questions with streaming answers and page-aware citations.
 
-This project is designed as a portfolio-ready retrieval system rather than a basic document chatbot. It demonstrates document parsing, recursive chunking, local embeddings, vector indexing, hybrid retrieval, reranking, prompt grounding, citation UX, index caching, and persistent chat history.
+Built as a portfolio-ready retrieval system demonstrating document parsing, recursive chunking, local embeddings, vector indexing, hybrid retrieval, reranking, prompt grounding, citation UX, index caching, and persistent chat history — all at zero cost.
 
 ## Live Demo
 
@@ -12,18 +12,16 @@ This project is designed as a portfolio-ready retrieval system rather than a bas
 
 - Upload multiple documents across common office formats.
 - Extract and chunk text with overlap-aware recursive splitting.
-- Embed chunks locally with `all-MiniLM-L6-v2`.
+- Embed chunks locally with `all-MiniLM-L6-v2` — no data sent to an embedding API.
 - Store and search vectors with FAISS.
-- Blend semantic search with BM25 keyword search.
+- Blend semantic search with BM25 keyword search for stronger recall.
 - Rerank retrieved chunks with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
-- Generate grounded answers with Gemini 3.5 Flash.
-- Stream responses into the chat UI.
-- Show citations with exact retrieved snippets plus PDF page, spreadsheet sheet, row range, or DOCX paragraph metadata when available.
-- Cache FAISS indexes so repeated uploads are fast.
-- Persist chat history per document set.
+- Generate grounded answers with Gemini 2.5 Flash or HuggingFace open-source models.
+- Stream responses into a clean, minimal chat UI.
+- Show citations with exact retrieved snippets plus PDF page, spreadsheet sheet, row range, or DOCX paragraph metadata.
+- Cache FAISS indexes so repeated uploads skip re-indexing.
+- Persist chat history per document set across sessions.
 - Export chat transcripts as Markdown.
-- Rebuild indexes or clear chat history from the sidebar.
-- Use Gemini or DeepSeek for hosted demos or cloud testing.
 
 ## Architecture
 
@@ -40,24 +38,24 @@ flowchart TD
     H --> I
     I --> J[Cross-Encoder Reranking]
     J --> K[Grounded Context + Citations]
-    K --> L[Gemini 3.5 Flash]
+    K --> L[Gemini 2.5 Flash / HuggingFace]
     L --> M[Streaming Answer]
     M --> N[Persistent Chat History]
 ~~~
 
 ## Demo Walkthrough
 
-You can test the app immediately with the files in `sample_docs/`:
+Test the app immediately with the sample files in `sample_docs/`:
 
 - `ai_governance_policy.txt`
 - `quarterly_business_summary.txt`
 - `project_risks.csv`
 
-1. Start the app and enter a Gemini or DeepSeek API key.
-2. Upload one or more files, such as a PDF report, a DOCX policy, and a spreadsheet.
+1. Start the app and enter a Gemini or HuggingFace API key in the sidebar.
+2. Upload one or more files — a PDF report, a DOCX policy, a spreadsheet.
 3. The app extracts text, builds chunks, creates local embeddings, and writes a FAISS index cache.
 4. Ask a question like `What are the main risks mentioned across these documents?`
-5. The assistant retrieves evidence, reranks it, streams an answer, and shows expandable citations.
+5. The assistant retrieves evidence, reranks it, streams a grounded answer, and shows expandable citations.
 
 ## Example Questions
 
@@ -76,12 +74,12 @@ You can test the app immediately with the files in `sample_docs/`:
 Documents
   -> text extraction
   -> recursive chunking
-  -> SentenceTransformer embeddings
+  -> SentenceTransformer embeddings (local, CPU)
   -> FAISS vector search
   -> optional BM25 hybrid retrieval
   -> optional query expansion
   -> optional cross-encoder reranking
-  -> Gemini grounded generation
+  -> grounded LLM generation
   -> answer with citations
 ~~~
 
@@ -89,16 +87,18 @@ Documents
 
 - Multi-format parsing for PDF, Word, text, CSV, and Excel files.
 - Recursive chunking that preserves paragraphs, sentence boundaries, and overlap.
-- Local CPU embeddings so document chunks are not sent to an embedding API.
+- Local CPU embeddings — document content stays on your machine.
 - FAISS vector search using normalized inner product similarity.
-- Content-hash based FAISS index cache in `.rag_cache/`.
+- Content-hash based FAISS index cache in `.rag_cache/` — unchanged uploads skip re-indexing instantly.
+- BM25 index cached per session — not rebuilt on every query.
 - Optional BM25 + FAISS hybrid retrieval for stronger lexical and semantic matching.
 - Optional cross-encoder reranking for more relevant final context.
-- Optional Gemini-powered query expansion for broader search coverage.
+- Optional query expansion for broader search coverage — works with both providers.
 - Conversation memory using recent chat turns in the answer prompt.
 - Persistent per-document chat history saved in `.chat_history/`.
 - Streaming responses and expandable citation snippets.
-- Free/open-source retrieval stack with only the final answer generation using Gemini.
+- Apple-style minimalist UI with ChatGPT-style chat bubbles.
+- Fully zero-cost stack — local embeddings, free Gemini tier, free HuggingFace inference.
 
 ## Technology Stack
 
@@ -107,26 +107,27 @@ Documents
 | UI | Streamlit |
 | Document parsing | pypdf, python-docx, pandas, openpyxl, xlrd |
 | Chunking | Custom recursive splitter |
-| Embeddings | sentence-transformers, all-MiniLM-L6-v2 |
+| Embeddings | sentence-transformers — all-MiniLM-L6-v2 |
 | Vector search | FAISS |
 | Keyword search | rank-bm25 |
 | Reranking | SentenceTransformers CrossEncoder |
-| LLM | Google Generative AI Gemini 3.5 Flash or DeepSeek-V4-Flash |
+| LLM | Gemini 2.5 Flash (Google AI Studio) or HuggingFace Serverless Inference |
 | Persistence | Local FAISS cache and JSON chat history |
 
 ## Why This Is Portfolio-Ready
 
-This project shows practical RAG engineering choices that appear in real systems:
+This project demonstrates practical RAG engineering decisions that appear in production systems:
 
-- **FAISS indexing:** faster and more recognizable than manual cosine similarity loops.
-- **Hybrid retrieval:** combines semantic similarity with exact keyword matching.
-- **Reranking:** improves final context quality before generation.
-- **Grounded prompting:** instructs the model to answer only from retrieved evidence.
-- **Page and sheet-aware citations:** makes outputs easier to trust and inspect.
-- **Caching:** avoids rebuilding embeddings and indexes for unchanged uploads.
-- **Memory:** supports follow-up questions without losing conversation context.
-- **Multi-LLM Support:** supports Gemini and DeepSeek-V4-Flash for testing and demos.
-- **Exportable transcripts:** makes answers easier to share as Markdown.
+- **FAISS indexing:** fast approximate nearest-neighbour search with normalized inner product.
+- **Hybrid retrieval:** semantic + lexical signals combined for stronger recall than either alone.
+- **Cached BM25:** index built once per session rather than rebuilt on every query.
+- **Reranking:** cross-encoder re-scores the top candidates before passing context to the LLM.
+- **Grounded prompting:** the model is instructed to answer only from retrieved evidence with inline citations.
+- **Page and sheet-aware citations:** traceable sources down to PDF page, spreadsheet row range, or DOCX paragraph.
+- **Content-hash caching:** FAISS index is keyed by file content hash — unchanged uploads are instant.
+- **Multi-LLM support:** Gemini and HuggingFace are interchangeable at runtime via the sidebar.
+- **Graceful degradation:** retrieval failures, reranker errors, and LLM rate limits are handled without crashing.
+- **Exportable transcripts:** chat history downloadable as Markdown.
 
 ## Quick Start
 
@@ -137,65 +138,74 @@ This project shows practical RAG engineering choices that appear in real systems
 pip install -r requirements.txt
 ~~~
 
-3. Create a free Gemini API key in Google AI Studio.
+3. Get a free API key:
+   - **Gemini:** [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
+   - **HuggingFace:** [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) — create a free Read token
+
 4. Run the app:
 
 ~~~bash
 streamlit run free_rag_chatbot.py
 ~~~
 
-5. Add your Gemini key in the sidebar, or configure Streamlit secrets:
+5. Enter your key in the sidebar, or set it in `.streamlit/secrets.toml`:
 
 ~~~toml
-GEMINI_API_KEY = "your_actual_api_key_here"
+GEMINI_API_KEY = "your_gemini_key_here"
+HF_API_TOKEN = "your_hf_token_here"
 ~~~
+
+See `.streamlit/secrets.toml.example` for the full template.
 
 ## Free-Tier Notes
 
-Gemini free tier may rate-limit requests. Query expansion is Gemini-only (the toggle is disabled when using DeepSeek) because it uses an extra Gemini request before answer generation. Keep it off for normal demos, then turn it on only when you want broader retrieval.
+- **Gemini** free tier rate-limits requests. Turn off Query Expansion to halve API calls per question. If the free quota runs out, switch to HuggingFace in the sidebar.
+- **HuggingFace** Serverless Inference is free with no billing required — just a free account token. Rate limits apply (~few hundred requests/hour), and cold-start model loading can add ~30s on the first request.
 
 ## Reliability Notes
 
-The app is built to degrade gracefully instead of crashing on common failure modes:
+The app degrades gracefully instead of crashing on common failure modes:
 
-- **Upload limits**: 50 MB per file, 150 MB total by default (tune `MAX_FILE_SIZE_MB` / `MAX_TOTAL_UPLOAD_MB` in the script). Oversized files are skipped with a clear message rather than hanging the app.
-- **Per-file chunk cap**: extremely large documents are truncated to `MAX_CHUNKS_PER_FILE` chunks with a visible warning, so one huge upload can't make indexing hang indefinitely.
-- **Retrieval and reranking failures** (e.g. the cross-encoder model fails to load on a memory-constrained host) fall back to ungrounded or score-only ranking instead of crashing the chat turn.
-- **LLM streaming retries**: transient Gemini/DeepSeek errors are retried automatically; if a stream fails partway through, the partial answer already shown is preserved rather than discarded.
-- **Encoding fallbacks**: `.txt` and `.csv` files that aren't UTF-8 fall back to Latin-1 instead of failing the whole upload.
-- **Malformed/corrupted chat history** on disk is detected and replaced with a fresh history instead of crashing the chat UI.
-- Uploaded file names are HTML-escaped before being rendered in the file-stats panel.
-
-## Known Dependency Note
-
-`google-generativeai` is Google's older Gemini SDK and has been in maintenance mode since the unified `google-genai` package was introduced. It still works for the model used here, but if you hit installation issues on a newer Python version, that's the underlying cause — migrating to `google-genai` is a reasonable future improvement. `numpy` is pinned below 2.0 for guaranteed compatibility with `faiss-cpu`.
+- **Upload limits:** 50 MB per file, 150 MB total. Oversized files are skipped with a clear message.
+- **Per-file chunk cap:** large documents are truncated to `MAX_CHUNKS_PER_FILE` chunks with a visible warning.
+- **Retrieval failures:** reranker errors fall back to score-based ranking rather than crashing.
+- **LLM streaming retries:** transient errors are retried automatically; partial answers are preserved.
+- **Encoding fallbacks:** `.txt` and `.csv` files that are not UTF-8 fall back to Latin-1.
+- **Corrupted chat history:** detected and replaced with a fresh session instead of crashing.
+- **HTML escaping:** uploaded file names are escaped before rendering in the stats panel.
 
 ## Deployment
 
-This app can be deployed on Streamlit Community Cloud.
+Deploy on Streamlit Community Cloud in minutes:
 
 1. Push this repository to GitHub.
-2. Create a new Streamlit app from the repository.
+2. Go to [share.streamlit.io](https://share.streamlit.io) and create a new app from the repo.
 3. Set the main file path to `free_rag_chatbot.py`.
-4. Add `GEMINI_API_KEY` in Streamlit secrets.
-5. Add the deployed URL to the Live Demo section above.
+4. Add your secrets under **Settings → Secrets**:
+
+~~~toml
+GEMINI_API_KEY = "your_gemini_key_here"
+HF_API_TOKEN = "your_hf_token_here"
+~~~
+
+5. Deploy — the app will install dependencies and start automatically.
 
 ## Local Runtime Artifacts
 
 The app creates these folders during use:
 
-- `.rag_cache/` for FAISS indexes and chunk metadata.
-- `.chat_history/` for persistent chat transcripts.
+- `.rag_cache/` — FAISS indexes and chunk metadata.
+- `.chat_history/` — persistent chat transcripts per document set.
 
-Both are ignored by Git because they are generated locally and can become large.
-
+Both are gitignored and safe to delete to free up disk space.
 
 ## Recent Upgrades
 
-- Page-aware PDF citations and sheet/row-aware spreadsheet citations.
-- Retrieval diagnostics showing semantic, BM25, combined, and rerank scores.
-- Sidebar controls for clearing chat history and rebuilding the FAISS cache.
-- Markdown transcript download for sharing conversations.
-- Support for both Google Gemini and DeepSeek API models.
-- Sample documents for a quick recruiter demo.
-- Hardened error handling, upload limits, and graceful degradation across the retrieval and generation pipeline.
+- Migrated from DeepSeek (paid) to HuggingFace Serverless Inference (free forever).
+- Updated Gemini model to gemini-2.5-flash (current stable free-tier model).
+- Redesigned UI with Apple-style minimalist theme and ChatGPT-style chat bubbles.
+- Added three-state main area: API key prompt → upload prompt → chat view.
+- BM25 index now cached per session — built once, not rebuilt on every query.
+- Query expansion now works with both Gemini and HuggingFace providers.
+- Added secrets.toml.example for streamlined local setup.
+- Relaxed numpy version pin to support Python 3.14+.
