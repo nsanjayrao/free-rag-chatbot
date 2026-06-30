@@ -56,7 +56,7 @@ on each query:
 
 **BM25 is not persisted to disk** — only FAISS and chunk metadata are serialised. BM25 is rebuilt from cached chunks on load (fast) and stored in the in-memory `document_index` dict to avoid rebuilding on every query.
 
-**LLM providers are interchangeable** — both use SSE streaming via `urllib.request` (no extra HTTP library). `stream_llm_response()` dispatches by provider string. HuggingFace uses the OpenAI-compatible router endpoint at `router.huggingface.co/hf-inference/v1/chat/completions` (the old `api-inference.huggingface.co` endpoint is deprecated and DNS-dead).
+**LLM providers are interchangeable** — both use SSE streaming via `urllib.request` (no extra HTTP library). `stream_llm_response()` dispatches by provider string. HuggingFace uses `api-inference.huggingface.co/models/{model}/v1/chat/completions` — the free Serverless Inference endpoint. Do NOT use `router.huggingface.co` — that is the PRO endpoint and returns 403 on free tokens.
 
 **Session state keys:** `file_signature`, `document_index`, `messages`. When `file_signature` changes (new upload), the index and chat history are both reloaded.
 
@@ -67,7 +67,7 @@ on each query:
 | Provider | Model constant | Free tier |
 |---|---|---|
 | Gemini | `GEMINI_MODEL_NAME = "gemini-2.5-flash"` | Google AI Studio free tier, rate-limited |
-| HuggingFace | `HF_MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3"` | HF Serverless Inference, free Read token, ~few hundred req/hr |
+| HuggingFace | `HF_MODEL_NAME = "HuggingFaceH4/zephyr-7b-beta"` | HF Serverless Inference, free Read token, non-gated model, ~few hundred req/hr |
 
 To change the HuggingFace model, update only `HF_MODEL_NAME` at the top of the file — `HF_ENDPOINT` is constructed from it.
 
