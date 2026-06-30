@@ -56,7 +56,7 @@ on each query:
 
 **BM25 is not persisted to disk** — only FAISS and chunk metadata are serialised. BM25 is rebuilt from cached chunks on load (fast) and stored in the in-memory `document_index` dict to avoid rebuilding on every query.
 
-**LLM providers are interchangeable** — both use SSE streaming via `urllib.request` (no extra HTTP library). `stream_llm_response()` dispatches by provider string. HuggingFace uses the OpenAI-compatible endpoint at `api-inference.huggingface.co/models/{model}/v1/chat/completions`.
+**LLM providers are interchangeable** — both use SSE streaming via `urllib.request` (no extra HTTP library). `stream_llm_response()` dispatches by provider string. HuggingFace uses the OpenAI-compatible router endpoint at `router.huggingface.co/hf-inference/v1/chat/completions` (the old `api-inference.huggingface.co` endpoint is deprecated and DNS-dead).
 
 **Session state keys:** `file_signature`, `document_index`, `messages`. When `file_signature` changes (new upload), the index and chat history are both reloaded.
 
