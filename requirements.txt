@@ -9,5 +9,6 @@ numpy>=1.24
 faiss-cpu>=1.7.4
 rank-bm25>=0.2.2
 xlrd>=2.0
+fpdf2>=2.7
 torch
 torchvision

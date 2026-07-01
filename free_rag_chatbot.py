@@ -51,17 +51,18 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
 /* ── Base ── */
-.stApp { background-color: #ffffff; }
+.stApp { background: linear-gradient(180deg, #ffffff 0%, #fafafd 100%); }
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
 header[data-testid="stHeader"] { background: transparent; }
+.block-container { padding-top: 2.2rem !important; }
 
 /* ── Sidebar ── */
 [data-testid="stSidebar"] {
@@ -84,13 +85,67 @@ header[data-testid="stHeader"] { background: transparent; }
     border-bottom: 1px solid #e5e5e5 !important;
 }
 
+/* ── Hero banner ── */
+.hero {
+    background: linear-gradient(135deg, #1d1d1f 0%, #2b2b30 55%, #3a3a40 100%);
+    border-radius: 22px;
+    padding: 30px 34px;
+    margin-bottom: 22px;
+    color: #ffffff;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+    position: relative;
+    overflow: hidden;
+}
+.hero::after {
+    content: "";
+    position: absolute;
+    top: -60px; right: -40px;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(0,113,227,0.35) 0%, rgba(0,113,227,0) 70%);
+}
+.hero-badge {
+    display: inline-block;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffffff;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.18);
+    padding: 5px 12px;
+    border-radius: 980px;
+    margin-bottom: 14px;
+}
+.hero-title {
+    font-size: 2.1rem;
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    margin: 0 0 8px;
+    line-height: 1.05;
+}
+.hero-desc {
+    font-size: 0.95rem;
+    color: #d2d2d7;
+    line-height: 1.6;
+    max-width: 640px;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+}
+.hero-desc strong { color: #ffffff; font-weight: 600; }
+
 /* ── Metrics ── */
 [data-testid="stMetric"] {
-    background: #f5f5f7 !important;
-    border-radius: 12px !important;
+    background: #ffffff !important;
+    border-radius: 14px !important;
     padding: 14px 18px !important;
-    border: none !important;
-    box-shadow: none !important;
+    border: 1px solid #ececf0 !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+[data-testid="stMetric"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.08) !important;
 }
 [data-testid="stMetricLabel"] p {
     font-size: 0.62rem !important;
@@ -142,19 +197,28 @@ header[data-testid="stHeader"] { background: transparent; }
 [data-testid="stChatMessage"] {
     background: transparent !important;
     border: none !important;
-    padding: 6px 0 !important;
+    padding: 4px 0 !important;
+}
+/* Hide default avatars for a cleaner iMessage-style thread */
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarUser"],
+[data-testid="stChatMessage"] [data-testid="stChatMessageAvatarAssistant"],
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-user"],
+[data-testid="stChatMessage"] [data-testid="chatAvatarIcon-assistant"] {
+    display: none !important;
 }
 
 /* User bubble — right aligned */
 [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
     flex-direction: row-reverse !important;
 }
+[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stChatMessageContent"],
 [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"] {
-    background: #1d1d1f !important;
+    background: linear-gradient(135deg, #0071e3 0%, #0a84ff 100%) !important;
     color: #ffffff !important;
-    border-radius: 18px 18px 4px 18px !important;
-    padding: 10px 16px !important;
-    max-width: 80% !important;
+    border-radius: 20px 20px 6px 20px !important;
+    padding: 11px 16px !important;
+    max-width: 78% !important;
+    box-shadow: 0 2px 10px rgba(0,113,227,0.22) !important;
 }
 [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"] * {
     color: #ffffff !important;
@@ -162,11 +226,13 @@ header[data-testid="stHeader"] { background: transparent; }
 
 /* Assistant bubble — left */
 [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stMarkdownContainer"] {
-    background: #f5f5f7 !important;
-    border-radius: 4px 18px 18px 18px !important;
-    padding: 12px 16px !important;
-    max-width: 86% !important;
+    background: #f2f2f5 !important;
+    border: 1px solid #e9e9ee !important;
+    border-radius: 6px 20px 20px 20px !important;
+    padding: 12px 17px !important;
+    max-width: 88% !important;
     color: #1d1d1f !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
 }
 
 /* ── File uploader ── */
@@ -193,14 +259,20 @@ header[data-testid="stHeader"] { background: transparent; }
     color: #1d1d1f !important;
 }
 
-/* ── Download button ── */
+/* ── Download button — black Apple pill ── */
 [data-testid="stDownloadButton"] > button {
     border-radius: 980px !important;
     font-size: 0.8rem !important;
-    font-weight: 500 !important;
-    border: 1px solid #d2d2d7 !important;
-    background: #ffffff !important;
-    color: #1d1d1f !important;
+    font-weight: 600 !important;
+    border: 1px solid #1d1d1f !important;
+    background: #1d1d1f !important;
+    color: #ffffff !important;
+    padding: 7px 20px !important;
+    transition: background 0.15s ease, transform 0.15s ease !important;
+}
+[data-testid="stDownloadButton"] > button:hover {
+    background: #000000 !important;
+    transform: translateY(-1px) !important;
 }
 
 /* ── Welcome / landing screens ── */
@@ -209,14 +281,14 @@ header[data-testid="stHeader"] { background: transparent; }
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 65vh;
+    min-height: 58vh;
     text-align: center;
     padding: 40px 24px;
 }
 .welcome-icon { font-size: 56px; margin-bottom: 20px; line-height: 1; }
 .welcome-title {
     font-size: 2.6rem;
-    font-weight: 700;
+    font-weight: 800;
     color: #1d1d1f;
     letter-spacing: -0.04em;
     margin: 0 0 12px;
@@ -225,7 +297,7 @@ header[data-testid="stHeader"] { background: transparent; }
     font-size: 1.05rem;
     color: #6e6e73;
     line-height: 1.6;
-    max-width: 440px;
+    max-width: 460px;
     margin: 0 auto 40px;
 }
 .feature-grid {
@@ -237,9 +309,16 @@ header[data-testid="stHeader"] { background: transparent; }
     text-align: left;
 }
 .feature-card {
-    background: #f5f5f7;
-    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid #ececf0;
+    border-radius: 16px;
     padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.feature-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.09);
 }
 .feature-card-title {
     font-size: 0.84rem;
@@ -263,6 +342,35 @@ header[data-testid="stHeader"] { background: transparent; }
     margin-bottom: 8px;
     font-size: 0.83rem;
     color: #1d1d1f;
+}
+
+/* ── Mobile hint (shown only on small screens) ── */
+.mobile-hint {
+    display: none;
+    background: #fff8e6;
+    border: 1px solid #ffe08a;
+    color: #7a5b00;
+    border-radius: 12px;
+    padding: 11px 15px;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    margin-bottom: 16px;
+}
+
+/* ── Responsive / phone layout ── */
+@media (max-width: 768px) {
+    .block-container { padding: 1rem 0.75rem !important; }
+    .hero { padding: 22px 20px; border-radius: 18px; }
+    .hero-title { font-size: 1.55rem; }
+    .hero-desc { font-size: 0.86rem; }
+    .welcome-title { font-size: 1.9rem; }
+    .welcome-sub { font-size: 0.95rem; }
+    .feature-grid { grid-template-columns: 1fr; max-width: 100%; }
+    .mobile-hint { display: block; }
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"],
+    [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stMarkdownContainer"] {
+        max-width: 94% !important;
+    }
 }
 </style>
 """,
@@ -408,6 +516,74 @@ def export_chat_markdown(messages):
         if m.get("sources"):
             lines.extend(["### Sources", "", m["sources"], ""])
     return "\n".join(lines)
+
+
+def _strip_markdown(text):
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", str(text))   # bold
+    text = re.sub(r"`([^`]*)`", r"\1", text)             # inline code
+    text = re.sub(r"^>\s?", "", text, flags=re.MULTILINE)  # blockquote
+    text = re.sub(r"^#{1,6}\s*", "", text, flags=re.MULTILINE)  # headings
+    return text
+
+
+def export_chat_pdf(messages):
+    """Render the conversation to a black-headed, Apple-styled PDF (bytes)."""
+    from fpdf import FPDF
+    from fpdf.enums import XPos, YPos
+
+    NEXT_LINE = {"new_x": XPos.LMARGIN, "new_y": YPos.NEXT}
+
+    def safe(text):
+        # fpdf core fonts are latin-1; replace anything outside it.
+        return _strip_markdown(text).encode("latin-1", "replace").decode("latin-1")
+
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(auto=True, margin=18)
+    pdf.add_page()
+    content_w = pdf.w - pdf.l_margin - pdf.r_margin
+
+    # Black header banner
+    pdf.set_fill_color(29, 29, 31)
+    pdf.rect(0, 0, pdf.w, 30, style="F")
+    pdf.set_xy(pdf.l_margin, 8)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.cell(0, 9, "RAG Analyzer", **NEXT_LINE)
+    pdf.set_x(pdf.l_margin)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(190, 190, 195)
+    pdf.cell(0, 6, "Chat Transcript", **NEXT_LINE)
+
+    pdf.ln(14)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(134, 134, 139)
+    pdf.cell(0, 6, safe(f"Exported {time.strftime('%Y-%m-%d %H:%M')}"), **NEXT_LINE)
+    pdf.ln(3)
+
+    for m in messages:
+        role = m.get("role", "message").title()
+        pdf.set_font("Helvetica", "B", 11)
+        if role.lower().startswith("user"):
+            pdf.set_text_color(29, 29, 31)
+        else:
+            pdf.set_text_color(0, 113, 227)
+        pdf.set_x(pdf.l_margin)
+        pdf.cell(0, 7, safe(role), **NEXT_LINE)
+
+        pdf.set_font("Helvetica", "", 10)
+        pdf.set_text_color(55, 55, 60)
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(content_w, 5.6, safe(m.get("content", "")))
+        pdf.ln(1)
+
+        if m.get("sources"):
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.set_text_color(134, 134, 139)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(content_w, 4.6, safe("Sources: " + m["sources"]))
+        pdf.ln(5)
+
+    return bytes(pdf.output())
 
 
 def make_source_label(metadata):
@@ -930,14 +1106,36 @@ if gemini_ready:
 
 
 # ── Main area ──────────────────────────────────────────────────────────────
+# Always-visible hero — describes the app and is the first thing seen on phones,
+# where the sidebar is collapsed behind the menu button.
+st.markdown(
+    """
+    <div class="hero">
+        <div class="hero-badge">Retrieval-Augmented Generation</div>
+        <div class="hero-title">RAG Analyzer</div>
+        <div class="hero-desc">
+            Upload your PDFs, Word docs, spreadsheets, or text files and ask questions in plain English.
+            The app splits each document into passages, finds the ones that actually answer your
+            question using <strong>hybrid semantic + keyword search</strong>, and generates a grounded,
+            <strong>cited</strong> answer with a free LLM — no data leaves for embeddings, and it costs nothing to run.
+        </div>
+    </div>
+    <div class="mobile-hint">
+        📱 <strong>On a phone?</strong> Tap the <strong>›</strong> arrow at the top-left to open the menu —
+        that's where you pick your model, add your API key, and upload documents.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 if not api_ready:
     st.markdown(
         """
         <div class="welcome-wrap">
             <div class="welcome-icon">🔍</div>
-            <div class="welcome-title">RAG Analyzer</div>
+            <div class="welcome-title">Get started</div>
             <div class="welcome-sub">
-                Enter your API key in the sidebar to get started.<br>
+                Enter your API key in the sidebar to begin.<br>
                 Choose <strong>Gemini</strong> (Google AI Studio — free tier) or
                 <strong>Groq</strong> (free API, no credit card, fast Llama 3.3 70B).
             </div>
@@ -1058,12 +1256,20 @@ else:
     if "messages" not in st.session_state:
         st.session_state["messages"] = load_chat_history(signature)
 
-    st.download_button(
-        "Download transcript",
-        data=export_chat_markdown(st.session_state["messages"]),
-        file_name="rag_chat_transcript.md",
-        mime="text/markdown",
-    )
+    try:
+        st.download_button(
+            "⬇  Download transcript (PDF)",
+            data=export_chat_pdf(st.session_state["messages"]),
+            file_name="rag_chat_transcript.pdf",
+            mime="application/pdf",
+        )
+    except Exception:
+        st.download_button(
+            "⬇  Download transcript (Markdown)",
+            data=export_chat_markdown(st.session_state["messages"]),
+            file_name="rag_chat_transcript.md",
+            mime="text/markdown",
+        )
 
     for message in st.session_state["messages"]:
         with st.chat_message(message["role"]):

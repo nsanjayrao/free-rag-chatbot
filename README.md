@@ -21,7 +21,7 @@ Built as a portfolio-ready retrieval system demonstrating document parsing, recu
 - Show citations with exact retrieved snippets plus PDF page, spreadsheet sheet, row range, or DOCX paragraph metadata.
 - Cache FAISS indexes so repeated uploads skip re-indexing.
 - Persist chat history per document set across sessions.
-- Export chat transcripts as Markdown.
+- Export chat transcripts as a styled PDF.
 
 ## Architecture
 
@@ -97,7 +97,8 @@ Documents
 - Conversation memory using recent chat turns in the answer prompt.
 - Persistent per-document chat history saved in `.chat_history/`.
 - Streaming responses and expandable citation snippets.
-- Apple-style minimalist UI with ChatGPT-style chat bubbles.
+- Apple-style minimalist UI with iMessage-style chat bubbles and a responsive, phone-friendly layout.
+- One-click styled PDF export of the full conversation.
 - Fully zero-cost stack — local embeddings, free Gemini tier, free Groq inference.
 
 ## Technology Stack
@@ -112,6 +113,7 @@ Documents
 | Keyword search | rank-bm25 |
 | Reranking | SentenceTransformers CrossEncoder |
 | LLM | Gemini 2.5 Flash (Google AI Studio) or Llama 3.3 70B (Groq) |
+| PDF export | fpdf2 |
 | Persistence | Local FAISS cache and JSON chat history |
 
 ## Why This Is Portfolio-Ready
@@ -127,7 +129,7 @@ This project demonstrates practical RAG engineering decisions that appear in pro
 - **Content-hash caching:** FAISS index is keyed by file content hash — unchanged uploads are instant.
 - **Multi-LLM support:** Gemini and Groq are interchangeable at runtime via the sidebar.
 - **Graceful degradation:** retrieval failures, reranker errors, and LLM rate limits are handled without crashing.
-- **Exportable transcripts:** chat history downloadable as Markdown.
+- **Exportable transcripts:** chat history downloadable as a styled PDF (Markdown fallback).
 
 ## Quick Start
 
@@ -203,7 +205,9 @@ Both are gitignored and safe to delete to free up disk space.
 
 - Added Groq (Llama 3.3 70B) as a free, fast fallback provider alongside Gemini.
 - Updated Gemini model to gemini-2.5-flash (current stable free-tier model).
-- Redesigned UI with Apple-style minimalist theme and ChatGPT-style chat bubbles.
+- Redesigned UI with an Apple-style hero banner, iMessage-style chat bubbles, and hover-lift cards.
+- Made the layout responsive for phones, with an in-app hint to open the collapsed sidebar.
+- Switched transcript export from Markdown to a styled, black-header PDF.
 - Added three-state main area: API key prompt → upload prompt → chat view.
 - BM25 index now cached per session — built once, not rebuilt on every query.
 - Query expansion now works with both Gemini and Groq providers.

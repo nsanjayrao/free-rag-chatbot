@@ -21,11 +21,11 @@ There are no tests, linter config, or build steps. The entire app is a single fi
 Everything lives in `free_rag_chatbot.py`. The file executes top-to-bottom as a Streamlit script on every browser interaction. Sections in order:
 
 1. **Constants** — model names, cache dirs, limits. To swap the Groq model, change `GROQ_MODEL_NAME` (line ~29).
-2. **Page config & CSS** — Apple-style minimalist theme with ChatGPT-style chat bubbles. All styling is inline `st.markdown` CSS.
+2. **Page config & CSS** — Apple-style theme with a black hero banner, iMessage-style chat bubbles, and a `@media (max-width: 768px)` block for phones. All styling is one inline `st.markdown` CSS blob. Default chat avatars are hidden via `display:none` (the `:has([data-testid="chatAvatarIcon-user"])` selector still works because the element stays in the DOM). A `.mobile-hint` div is `display:none` on desktop and shown on mobile to point users at the collapsed sidebar.
 3. **Secrets** — `GEMINI_API_KEY` and `GROQ_API_KEY` loaded from `st.secrets`.
 4. **Sidebar** — provider selector (Gemini / Groq), file uploader, retrieval toggles.
 5. **Functions** — pure Python, no side effects on import. Defined before use.
-6. **Main area** — three rendering states based on `api_ready` and `uploaded_files`:
+6. **Main area** — an always-visible hero banner (also the first thing seen on phones), then three rendering states based on `api_ready` and `uploaded_files`:
    - No key → welcome/feature screen
    - Key set, no files → upload prompt screen
    - Files uploaded → metrics row + chat UI
@@ -61,6 +61,8 @@ on each query:
 **Session state keys:** `file_signature`, `document_index`, `messages`. When `file_signature` changes (new upload), the index and chat history are both reloaded.
 
 **Chat history** is persisted to `.chat_history/<sig>.json` keyed by the same file signature. Switching document sets automatically loads the matching history.
+
+**Transcript export** is a styled PDF via `export_chat_pdf()` (fpdf2, black header banner). fpdf core fonts are latin-1 only, so text is run through `_strip_markdown()` + `.encode("latin-1", "replace")` before writing — non-latin chars/emoji become `?`. The download button falls back to `export_chat_markdown()` if PDF generation raises.
 
 ## LLM Provider Details
 
