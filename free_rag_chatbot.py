@@ -821,7 +821,16 @@ def stream_hf_response(prompt, api_token):
         "max_tokens": 2048,
     }).encode("utf-8")
     req = urllib.request.Request(HF_ENDPOINT, data=payload, headers=headers)
-    with urllib.request.urlopen(req, timeout=120) as resp:
+    try:
+        resp = urllib.request.urlopen(req, timeout=120)
+    except urllib.error.HTTPError as exc:
+        # The router explains *why* it rejected us in the body — surface it.
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        raise RuntimeError(f"HTTP {exc.code}: {body or exc.reason}") from exc
+    with resp:
         for line in resp:
             line_str = line.decode("utf-8").strip()
             if not line_str or not line_str.startswith("data: "):
@@ -861,6 +870,19 @@ def friendly_llm_error(error, provider):
     if provider == "HuggingFace":
         if "401" in msg:
             return "HuggingFace auth failed — check your token at huggingface.co/settings/tokens."
+        if "403" in msg:
+            return (
+                "HuggingFace 403 — your token cannot call Inference Providers. "
+                "Create a token with the **'Make calls to Inference Providers'** permission "
+                "at huggingface.co/settings/tokens (New token → Fine-grained → tick that box), "
+                "then update HF_API_TOKEN in Streamlit secrets. "
+                f"Router said: {msg}"
+            )
+        if "402" in msg or "payment" in low or "credit" in low or "quota" in low:
+            return (
+                "HuggingFace inference credits exhausted for this month (free tier gives a small "
+                "monthly allowance for third-party providers). Switch to Gemini, or add credits."
+            )
         if "429" in msg or "rate" in low:
             return "HuggingFace rate limit hit (free tier allows ~few hundred req/hr). Wait a moment and retry."
         if "503" in msg or "loading" in low:
