@@ -28,6 +28,8 @@ RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
 GROQ_MODEL_NAME = "llama-3.3-70b-versatile"
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+# Cloudflare (in front of Groq) blocks the default Python-urllib User-Agent (error 1010).
+HTTP_USER_AGENT = "Mozilla/5.0 (compatible; RAGAnalyzer/1.0; +https://streamlit.io)"
 PARSER_VERSION = "v2-page-sheet-citations"
 TOP_K_RETRIEVAL = 10
 TOP_K_CONTEXT = 4
@@ -692,7 +694,11 @@ def _groq_json_request(prompt, api_token, timeout=30):
         "temperature": 0.2,
         "max_tokens": 256,
     }).encode("utf-8")
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_token}"}
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_token}",
+        "User-Agent": HTTP_USER_AGENT,
+    }
     req = urllib.request.Request(GROQ_ENDPOINT, data=payload, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
@@ -812,7 +818,11 @@ def stream_gemini_response(prompt):
 
 
 def stream_groq_response(prompt, api_token):
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_token}"}
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_token}",
+        "User-Agent": HTTP_USER_AGENT,
+    }
     payload = json.dumps({
         "model": GROQ_MODEL_NAME,
         "messages": [{"role": "user", "content": prompt}],
