@@ -26,8 +26,8 @@ CHAT_DIR = APP_DIR / ".chat_history"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 GEMINI_MODEL_NAME = "gemini-2.5-flash"
-HF_MODEL_NAME = "HuggingFaceH4/zephyr-7b-beta:featherless-ai"
-HF_ENDPOINT = "https://router.huggingface.co/v1/chat/completions"
+GROQ_MODEL_NAME = "llama-3.3-70b-versatile"
+GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 PARSER_VERSION = "v2-page-sheet-citations"
 TOP_K_RETRIEVAL = 10
 TOP_K_CONTEXT = 4
@@ -275,9 +275,9 @@ except Exception:
     gemini_key = ""
 
 try:
-    hf_key = st.secrets.get("HF_API_TOKEN", "")
+    groq_key = st.secrets.get("GROQ_API_KEY", "")
 except Exception:
-    hf_key = ""
+    groq_key = ""
 
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
@@ -285,10 +285,10 @@ with st.sidebar:
     st.markdown("### Model")
     llm_provider = st.selectbox(
         "Provider",
-        ["Gemini", "HuggingFace"],
+        ["Gemini", "Groq"],
         help=(
             "Gemini: free tier via Google AI Studio. "
-            "HuggingFace: free serverless inference, just needs a free HF token."
+            "Groq: free API, no credit card, fast Llama 3.3 70B inference."
         ),
         label_visibility="collapsed",
     )
@@ -303,14 +303,14 @@ with st.sidebar:
         else:
             st.success("Gemini key loaded from secrets.")
     else:
-        if not hf_key:
-            hf_key = st.text_input(
-                "HuggingFace API token",
+        if not groq_key:
+            groq_key = st.text_input(
+                "Groq API key",
                 type="password",
-                placeholder="Paste your HF token (huggingface.co/settings/tokens)…",
+                placeholder="Paste your Groq key (console.groq.com/keys)…",
             )
         else:
-            st.success("HuggingFace token loaded from secrets.")
+            st.success("Groq key loaded from secrets.")
 
     st.markdown("### Documents")
     uploaded_files = st.file_uploader(
@@ -685,20 +685,20 @@ def _parse_expansions(text, original):
     return [original] + expansions[:3]
 
 
-def _hf_json_request(prompt, api_token, timeout=30):
+def _groq_json_request(prompt, api_token, timeout=30):
     payload = json.dumps({
-        "model": HF_MODEL_NAME,
+        "model": GROQ_MODEL_NAME,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.2,
         "max_tokens": 256,
     }).encode("utf-8")
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_token}"}
-    req = urllib.request.Request(HF_ENDPOINT, data=payload, headers=headers)
+    req = urllib.request.Request(GROQ_ENDPOINT, data=payload, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read())
 
 
-def expand_query(query, provider, gemini_ready=False, hf_key=None):
+def expand_query(query, provider, gemini_ready=False, groq_key=None):
     if provider == "Gemini" and gemini_ready:
         try:
             response = genai.GenerativeModel(GEMINI_MODEL_NAME).generate_content(_expansion_prompt(query))
@@ -706,9 +706,9 @@ def expand_query(query, provider, gemini_ready=False, hf_key=None):
         except Exception:
             return [query]
 
-    if provider == "HuggingFace" and hf_key:
+    if provider == "Groq" and groq_key:
         try:
-            data = _hf_json_request(_expansion_prompt(query), hf_key)
+            data = _groq_json_request(_expansion_prompt(query), groq_key)
             return _parse_expansions(data["choices"][0]["message"]["content"], query)
         except Exception:
             return [query]
@@ -718,10 +718,10 @@ def expand_query(query, provider, gemini_ready=False, hf_key=None):
 
 # ── Retrieval ──────────────────────────────────────────────────────────────
 def retrieve_candidates(query, model, document_index, use_hybrid, use_expansion,
-                        provider=None, gemini_ready=False, hf_key=None):
+                        provider=None, gemini_ready=False, groq_key=None):
     chunks = document_index["chunks"]
     queries = (
-        expand_query(query, provider, gemini_ready, hf_key) if use_expansion else [query]
+        expand_query(query, provider, gemini_ready, groq_key) if use_expansion else [query]
     )
     candidate_scores = {}
 
@@ -811,20 +811,20 @@ def stream_gemini_response(prompt):
             yield text
 
 
-def stream_hf_response(prompt, api_token):
+def stream_groq_response(prompt, api_token):
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_token}"}
     payload = json.dumps({
-        "model": HF_MODEL_NAME,
+        "model": GROQ_MODEL_NAME,
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "temperature": 0.2,
         "max_tokens": 2048,
     }).encode("utf-8")
-    req = urllib.request.Request(HF_ENDPOINT, data=payload, headers=headers)
+    req = urllib.request.Request(GROQ_ENDPOINT, data=payload, headers=headers)
     try:
         resp = urllib.request.urlopen(req, timeout=120)
     except urllib.error.HTTPError as exc:
-        # The router explains *why* it rejected us in the body — surface it.
+        # Groq explains *why* it rejected us in the body — surface it.
         try:
             body = exc.read().decode("utf-8", errors="replace")
         except Exception:
@@ -850,8 +850,8 @@ def stream_hf_response(prompt, api_token):
 def stream_llm_response(prompt, provider, **kwargs):
     if provider == "Gemini":
         yield from stream_gemini_response(prompt)
-    elif provider == "HuggingFace":
-        yield from stream_hf_response(prompt, kwargs["hf_key"])
+    elif provider == "Groq":
+        yield from stream_groq_response(prompt, kwargs["groq_key"])
 
 
 def friendly_llm_error(error, provider):
@@ -864,30 +864,17 @@ def friendly_llm_error(error, provider):
             return (
                 f"Gemini rate limit hit (free tier). Wait ~{secs}s then retry. "
                 "Tip: turn off Query expansion to reduce API calls. "
-                "Or switch to HuggingFace in the sidebar."
+                "Or switch to Groq in the sidebar."
             )
         return f"Gemini error: {msg}"
-    if provider == "HuggingFace":
-        if "401" in msg:
-            return "HuggingFace auth failed — check your token at huggingface.co/settings/tokens."
-        if "403" in msg:
-            return (
-                "HuggingFace 403 — your token cannot call Inference Providers. "
-                "Create a token with the **'Make calls to Inference Providers'** permission "
-                "at huggingface.co/settings/tokens (New token → Fine-grained → tick that box), "
-                "then update HF_API_TOKEN in Streamlit secrets. "
-                f"Router said: {msg}"
-            )
-        if "402" in msg or "payment" in low or "credit" in low or "quota" in low:
-            return (
-                "HuggingFace inference credits exhausted for this month (free tier gives a small "
-                "monthly allowance for third-party providers). Switch to Gemini, or add credits."
-            )
+    if provider == "Groq":
+        if "401" in msg or "invalid_api_key" in low:
+            return "Groq auth failed — check your key at console.groq.com/keys."
         if "429" in msg or "rate" in low:
-            return "HuggingFace rate limit hit (free tier allows ~few hundred req/hr). Wait a moment and retry."
-        if "503" in msg or "loading" in low:
-            return "HuggingFace model is loading (cold start). Wait ~30s and try again."
-        return f"HuggingFace error: {msg}"
+            return "Groq rate limit hit (free tier). Wait a few seconds and retry, or switch to Gemini."
+        if "413" in msg or "too large" in low or "context" in low:
+            return "Request too large for the model context. Reduce cited chunks in the sidebar and retry."
+        return f"Groq error: {msg}"
     return f"Error: {msg}"
 
 
@@ -925,8 +912,8 @@ def validate_uploads(files):
 
 # ── State ──────────────────────────────────────────────────────────────────
 gemini_ready = llm_provider == "Gemini" and bool(gemini_key)
-hf_ready = llm_provider == "HuggingFace" and bool(hf_key)
-api_ready = gemini_ready or hf_ready
+groq_ready = llm_provider == "Groq" and bool(groq_key)
+api_ready = gemini_ready or groq_ready
 
 if gemini_ready:
     genai.configure(api_key=gemini_key)
@@ -942,7 +929,7 @@ if not api_ready:
             <div class="welcome-sub">
                 Enter your API key in the sidebar to get started.<br>
                 Choose <strong>Gemini</strong> (Google AI Studio — free tier) or
-                <strong>HuggingFace</strong> (free serverless inference, no credit card needed).
+                <strong>Groq</strong> (free API, no credit card, fast Llama 3.3 70B).
             </div>
             <div class="feature-grid">
                 <div class="feature-card">
@@ -951,7 +938,7 @@ if not api_ready:
                 </div>
                 <div class="feature-card">
                     <div class="feature-card-title">Zero Cost</div>
-                    <div class="feature-card-desc">Local embeddings · Free Gemini or HuggingFace</div>
+                    <div class="feature-card-desc">Local embeddings · Free Gemini or Groq</div>
                 </div>
                 <div class="feature-card">
                     <div class="feature-card-title">Multi-format</div>
@@ -1096,7 +1083,7 @@ else:
                     use_query_expansion,
                     provider=llm_provider,
                     gemini_ready=gemini_ready,
-                    hf_key=hf_key if hf_ready else None,
+                    groq_key=groq_key if groq_ready else None,
                 )
                 if use_reranker:
                     candidates = rerank_candidates(user_query, candidates, chunks)
@@ -1111,7 +1098,7 @@ else:
             placeholder = st.empty()
             streamed_text = ""
             error_note = None
-            llm_kwargs = {"hf_key": hf_key} if llm_provider == "HuggingFace" else {}
+            llm_kwargs = {"groq_key": groq_key} if llm_provider == "Groq" else {}
 
             for attempt in range(LLM_MAX_RETRIES + 1):
                 streamed_text = ""

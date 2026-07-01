@@ -16,7 +16,7 @@ Built as a portfolio-ready retrieval system demonstrating document parsing, recu
 - Store and search vectors with FAISS.
 - Blend semantic search with BM25 keyword search for stronger recall.
 - Rerank retrieved chunks with `cross-encoder/ms-marco-MiniLM-L-6-v2`.
-- Generate grounded answers with Gemini 2.5 Flash or HuggingFace open-source models.
+- Generate grounded answers with Gemini 2.5 Flash or Groq-hosted Llama 3.3 70B.
 - Stream responses into a clean, minimal chat UI.
 - Show citations with exact retrieved snippets plus PDF page, spreadsheet sheet, row range, or DOCX paragraph metadata.
 - Cache FAISS indexes so repeated uploads skip re-indexing.
@@ -38,7 +38,7 @@ flowchart TD
     H --> I
     I --> J[Cross-Encoder Reranking]
     J --> K[Grounded Context + Citations]
-    K --> L[Gemini 2.5 Flash / HuggingFace]
+    K --> L[Gemini 2.5 Flash / Groq Llama 3.3 70B]
     L --> M[Streaming Answer]
     M --> N[Persistent Chat History]
 ~~~
@@ -51,7 +51,7 @@ Test the app immediately with the sample files in `sample_docs/`:
 - `quarterly_business_summary.txt`
 - `project_risks.csv`
 
-1. Start the app and enter a Gemini or HuggingFace API key in the sidebar.
+1. Start the app and enter a Gemini or Groq API key in the sidebar.
 2. Upload one or more files — a PDF report, a DOCX policy, a spreadsheet.
 3. The app extracts text, builds chunks, creates local embeddings, and writes a FAISS index cache.
 4. Ask a question like `What are the main risks mentioned across these documents?`
@@ -98,7 +98,7 @@ Documents
 - Persistent per-document chat history saved in `.chat_history/`.
 - Streaming responses and expandable citation snippets.
 - Apple-style minimalist UI with ChatGPT-style chat bubbles.
-- Fully zero-cost stack — local embeddings, free Gemini tier, free HuggingFace inference.
+- Fully zero-cost stack — local embeddings, free Gemini tier, free Groq inference.
 
 ## Technology Stack
 
@@ -111,7 +111,7 @@ Documents
 | Vector search | FAISS |
 | Keyword search | rank-bm25 |
 | Reranking | SentenceTransformers CrossEncoder |
-| LLM | Gemini 2.5 Flash (Google AI Studio) or HuggingFace Serverless Inference |
+| LLM | Gemini 2.5 Flash (Google AI Studio) or Llama 3.3 70B (Groq) |
 | Persistence | Local FAISS cache and JSON chat history |
 
 ## Why This Is Portfolio-Ready
@@ -125,7 +125,7 @@ This project demonstrates practical RAG engineering decisions that appear in pro
 - **Grounded prompting:** the model is instructed to answer only from retrieved evidence with inline citations.
 - **Page and sheet-aware citations:** traceable sources down to PDF page, spreadsheet row range, or DOCX paragraph.
 - **Content-hash caching:** FAISS index is keyed by file content hash — unchanged uploads are instant.
-- **Multi-LLM support:** Gemini and HuggingFace are interchangeable at runtime via the sidebar.
+- **Multi-LLM support:** Gemini and Groq are interchangeable at runtime via the sidebar.
 - **Graceful degradation:** retrieval failures, reranker errors, and LLM rate limits are handled without crashing.
 - **Exportable transcripts:** chat history downloadable as Markdown.
 
@@ -140,7 +140,7 @@ pip install -r requirements.txt
 
 3. Get a free API key:
    - **Gemini:** [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
-   - **HuggingFace:** [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) — create a free Read token
+   - **Groq:** [console.groq.com/keys](https://console.groq.com/keys) — create a free API key (no credit card)
 
 4. Run the app:
 
@@ -152,15 +152,15 @@ streamlit run free_rag_chatbot.py
 
 ~~~toml
 GEMINI_API_KEY = "your_gemini_key_here"
-HF_API_TOKEN = "your_hf_token_here"
+GROQ_API_KEY = "your_groq_key_here"
 ~~~
 
 See `.streamlit/secrets.toml.example` for the full template.
 
 ## Free-Tier Notes
 
-- **Gemini** free tier rate-limits requests. Turn off Query Expansion to halve API calls per question. If the free quota runs out, switch to HuggingFace in the sidebar.
-- **HuggingFace** Serverless Inference is free with no billing required — just a free account token. Rate limits apply (~few hundred requests/hour), and cold-start model loading can add ~30s on the first request.
+- **Gemini** free tier rate-limits requests. Turn off Query Expansion to halve API calls per question. If the free quota runs out, switch to Groq in the sidebar.
+- **Groq** is free with no billing required — just a free API key from console.groq.com. Generous limits (~14,400 requests/day, 30 per minute) and very fast inference with no cold-start delay.
 
 ## Reliability Notes
 
@@ -185,7 +185,7 @@ Deploy on Streamlit Community Cloud in minutes:
 
 ~~~toml
 GEMINI_API_KEY = "your_gemini_key_here"
-HF_API_TOKEN = "your_hf_token_here"
+GROQ_API_KEY = "your_groq_key_here"
 ~~~
 
 5. Deploy — the app will install dependencies and start automatically.
@@ -201,11 +201,11 @@ Both are gitignored and safe to delete to free up disk space.
 
 ## Recent Upgrades
 
-- Migrated from DeepSeek (paid) to HuggingFace Serverless Inference (free forever).
+- Added Groq (Llama 3.3 70B) as a free, fast fallback provider alongside Gemini.
 - Updated Gemini model to gemini-2.5-flash (current stable free-tier model).
 - Redesigned UI with Apple-style minimalist theme and ChatGPT-style chat bubbles.
 - Added three-state main area: API key prompt → upload prompt → chat view.
 - BM25 index now cached per session — built once, not rebuilt on every query.
-- Query expansion now works with both Gemini and HuggingFace providers.
+- Query expansion now works with both Gemini and Groq providers.
 - Added secrets.toml.example for streamlined local setup.
 - Relaxed numpy version pin to support Python 3.14+.

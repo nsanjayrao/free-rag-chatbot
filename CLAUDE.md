@@ -11,7 +11,7 @@ streamlit run free_rag_chatbot.py
 Requires API keys in `.streamlit/secrets.toml` (gitignored — copy from `.streamlit/secrets.toml.example`):
 ```toml
 GEMINI_API_KEY = "..."
-HF_API_TOKEN = "..."
+GROQ_API_KEY = "..."
 ```
 
 There are no tests, linter config, or build steps. The entire app is a single file.
@@ -20,10 +20,10 @@ There are no tests, linter config, or build steps. The entire app is a single fi
 
 Everything lives in `free_rag_chatbot.py`. The file executes top-to-bottom as a Streamlit script on every browser interaction. Sections in order:
 
-1. **Constants** — model names, cache dirs, limits. To swap the HuggingFace model, change `HF_MODEL_NAME` (line ~29); `HF_ENDPOINT` is derived from it automatically.
+1. **Constants** — model names, cache dirs, limits. To swap the Groq model, change `GROQ_MODEL_NAME` (line ~29).
 2. **Page config & CSS** — Apple-style minimalist theme with ChatGPT-style chat bubbles. All styling is inline `st.markdown` CSS.
-3. **Secrets** — `GEMINI_API_KEY` and `HF_API_TOKEN` loaded from `st.secrets`.
-4. **Sidebar** — provider selector (Gemini / HuggingFace), file uploader, retrieval toggles.
+3. **Secrets** — `GEMINI_API_KEY` and `GROQ_API_KEY` loaded from `st.secrets`.
+4. **Sidebar** — provider selector (Gemini / Groq), file uploader, retrieval toggles.
 5. **Functions** — pure Python, no side effects on import. Defined before use.
 6. **Main area** — three rendering states based on `api_ready` and `uploaded_files`:
    - No key → welcome/feature screen
@@ -47,7 +47,7 @@ on each query:
   → rerank_candidates()              # CrossEncoder scores, replaces combined score
   → build_context()                  # top-k chunks → numbered context string + citation metadata
   → build_prompt()                   # context + last 6 turns of history → LLM
-  → stream_gemini_response()         # or stream_hf_response() — SSE streaming
+  → stream_gemini_response()         # or stream_groq_response() — SSE streaming
 ```
 
 ## Key Design Decisions
@@ -56,7 +56,7 @@ on each query:
 
 **BM25 is not persisted to disk** — only FAISS and chunk metadata are serialised. BM25 is rebuilt from cached chunks on load (fast) and stored in the in-memory `document_index` dict to avoid rebuilding on every query.
 
-**LLM providers are interchangeable** — both use SSE streaming via `urllib.request` (no extra HTTP library). `stream_llm_response()` dispatches by provider string. HuggingFace uses `router.huggingface.co/hf-inference/v1/chat/completions` with `HuggingFaceH4/zephyr-7b-beta`. `api-inference.huggingface.co` fails DNS on Streamlit Cloud. The router works but requires a non-gated model — gated models (like Mistral) return 403 even with a valid free token.
+**LLM providers are interchangeable** — both use SSE streaming via `urllib.request` (no extra HTTP library). `stream_llm_response()` dispatches by provider string. Groq uses the OpenAI-compatible endpoint `api.groq.com/openai/v1/chat/completions` with a plain bearer key (no permission scopes to configure, unlike HuggingFace). Both `stream_groq_response()` and `_groq_json_request()` (query expansion) surface the actual HTTP error body on failure.
 
 **Session state keys:** `file_signature`, `document_index`, `messages`. When `file_signature` changes (new upload), the index and chat history are both reloaded.
 
@@ -67,9 +67,9 @@ on each query:
 | Provider | Model constant | Free tier |
 |---|---|---|
 | Gemini | `GEMINI_MODEL_NAME = "gemini-2.5-flash"` | Google AI Studio free tier, rate-limited |
-| HuggingFace | `HF_MODEL_NAME = "HuggingFaceH4/zephyr-7b-beta"` | HF Serverless Inference, free Read token, non-gated model, ~few hundred req/hr |
+| Groq | `GROQ_MODEL_NAME = "llama-3.3-70b-versatile"` | Free API key, no credit card, ~14.4k req/day, 30 req/min |
 
-To change the HuggingFace model, update only `HF_MODEL_NAME` at the top of the file — `HF_ENDPOINT` is constructed from it.
+To change the Groq model, update only `GROQ_MODEL_NAME` at the top of the file. Available free models are listed at console.groq.com/docs/models.
 
 ## File Structure
 
@@ -78,7 +78,7 @@ free_rag_chatbot.py          # entire app
 requirements.txt             # pinned deps
 sample_docs/                 # demo files for testing (txt, csv)
 .streamlit/
-    secrets.toml             # gitignored — real keys go here
+    secrets.toml             # gitignored — real keys go here (GEMINI_API_KEY, GROQ_API_KEY)
     secrets.toml.example     # committed template
 .rag_cache/                  # gitignored — FAISS indexes + pickle metadata
 .chat_history/               # gitignored — JSON chat history per document set
