@@ -22,13 +22,16 @@ Everything lives in `free_rag_chatbot.py`. The file executes top-to-bottom as a 
 
 1. **Constants** — model names, cache dirs, limits. To swap the Groq model, change `GROQ_MODEL_NAME` (line ~29).
 2. **Page config & CSS** — Apple-style theme with a black hero banner, iMessage-style chat bubbles, and a `@media (max-width: 768px)` block for phones. All styling is one inline `st.markdown` CSS blob. Default chat avatars are hidden via `display:none` (the `:has([data-testid="chatAvatarIcon-user"])` selector still works because the element stays in the DOM). A `.mobile-hint` div is `display:none` on desktop and shown on mobile to point users at the collapsed sidebar.
-3. **Secrets** — `GEMINI_API_KEY` and `GROQ_API_KEY` loaded from `st.secrets`.
-4. **Sidebar** — provider selector (Gemini / Groq), file uploader, retrieval toggles.
+3. **Secrets** — `GEMINI_API_KEY` and `GROQ_API_KEY` loaded from `st.secrets`. Keys are never entered by the user; the UI has no key inputs.
+4. **Sidebar** — provider selector (Gemini / Groq) and retrieval toggles only. The file uploader lives in the main area (center), not the sidebar.
 5. **Functions** — pure Python, no side effects on import. Defined before use.
-6. **Main area** — an always-visible hero banner (also the first thing seen on phones), then three rendering states based on `api_ready` and `uploaded_files`:
-   - No key → welcome/feature screen
-   - Key set, no files → upload prompt screen
-   - Files uploaded → metrics row + chat UI
+6. **Main area** — an always-visible hero banner, then a ChatGPT-style central flow:
+   - `not api_ready` → "Almost ready" setup screen (only if secrets are missing)
+   - No file → centered intake: big title + centered `st.file_uploader` (the "search bar") + feature cards, then `st.stop()`
+   - File uploaded, `started == False` (no user turn yet) → uploader tucked into a `📎 Documents` expander, metrics, then a centered `st.form` first-question box
+   - `started == True` → conversation thread + `st.chat_input` pinned at the bottom for follow-ups
+
+   **`started`** = `any(m["role"] == "user" for m in messages)`. Both the form and the bottom input just append the user turn and `st.rerun()`; a single generation block (`if messages[-1]["role"] == "user"`) streams the reply, so there is only one LLM-call path.
 
 ## RAG Pipeline (data flow)
 

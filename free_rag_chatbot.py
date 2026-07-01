@@ -357,6 +357,76 @@ header[data-testid="stHeader"] { background: transparent; }
     margin-bottom: 16px;
 }
 
+/* ── Central intake / search-bar composer ── */
+.intake-title {
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    color: #1d1d1f;
+    margin: 18px 0 6px;
+}
+.intake-sub {
+    text-align: center;
+    color: #6e6e73;
+    font-size: 1rem;
+    line-height: 1.55;
+    margin: 0 auto 24px;
+    max-width: 520px;
+}
+.intake-formats {
+    text-align: center;
+    color: #86868b;
+    font-size: 0.78rem;
+    letter-spacing: 0.01em;
+    margin: 10px 0 4px;
+}
+/* Centre + constrain the file uploader so it reads like one clean bar */
+[data-testid="stFileUploader"] {
+    max-width: 680px;
+    margin: 0 auto 8px;
+}
+[data-testid="stFileUploaderDropzone"] {
+    min-height: 92px;
+    align-items: center;
+}
+/* First-question search box (a Streamlit form) */
+[data-testid="stForm"] {
+    max-width: 680px;
+    margin: 6px auto 0;
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+[data-testid="stForm"] [data-testid="stTextInput"] input {
+    border-radius: 980px !important;
+    border: 1px solid #d2d2d7 !important;
+    background: #ffffff !important;
+    padding: 15px 22px !important;
+    font-size: 1rem !important;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.07) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+[data-testid="stForm"] [data-testid="stTextInput"] input:focus {
+    border-color: #0071e3 !important;
+    box-shadow: 0 4px 22px rgba(0,113,227,0.18) !important;
+    outline: none !important;
+}
+[data-testid="stFormSubmitButton"] > button {
+    border-radius: 980px !important;
+    background: #1d1d1f !important;
+    color: #ffffff !important;
+    border: 1px solid #1d1d1f !important;
+    font-weight: 600 !important;
+    font-size: 0.86rem !important;
+    padding: 9px 22px !important;
+    transition: background 0.15s ease, transform 0.15s ease !important;
+}
+[data-testid="stFormSubmitButton"] > button:hover {
+    background: #000000 !important;
+    transform: translateY(-1px) !important;
+}
+
 /* ── Responsive / phone layout ── */
 @media (max-width: 768px) {
     .block-container { padding: 1rem 0.75rem !important; }
@@ -365,6 +435,8 @@ header[data-testid="stHeader"] { background: transparent; }
     .hero-desc { font-size: 0.86rem; }
     .welcome-title { font-size: 1.9rem; }
     .welcome-sub { font-size: 0.95rem; }
+    .intake-title { font-size: 1.5rem; }
+    .intake-sub { font-size: 0.9rem; }
     .feature-grid { grid-template-columns: 1fr; max-width: 100%; }
     .mobile-hint { display: block; }
     [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"],
@@ -401,17 +473,6 @@ with st.sidebar:
             "Groq: free API, no credit card, fast Llama 3.3 70B inference."
         ),
         label_visibility="collapsed",
-    )
-
-    st.markdown("### Documents")
-    uploaded_files = st.file_uploader(
-        "Drop files here or click to browse",
-        type=["pdf", "docx", "txt", "csv", "xlsx", "xls"],
-        accept_multiple_files=True,
-        label_visibility="collapsed",
-    )
-    st.caption(
-        f"Up to {MAX_FILE_SIZE_MB} MB per file · {MAX_TOTAL_UPLOAD_MB} MB total"
     )
 
     st.markdown("### Retrieval")
@@ -1142,40 +1203,51 @@ if not api_ready:
         unsafe_allow_html=True,
     )
 
-elif not uploaded_files:
-    st.markdown(
-        """
-        <div class="welcome-wrap">
-            <div class="welcome-icon">📂</div>
-            <div class="welcome-title">Upload your documents</div>
-            <div class="welcome-sub">
-                Use the <strong>Documents</strong> section in the sidebar to upload files.
-                Then ask questions and get grounded, cited answers.
-            </div>
-            <div class="feature-grid">
-                <div class="feature-card">
-                    <div class="feature-card-title">PDF</div>
-                    <div class="feature-card-desc">Page-by-page extraction with page citations</div>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-card-title">DOCX</div>
-                    <div class="feature-card-desc">Paragraph-range extraction</div>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-card-title">CSV / Excel</div>
-                    <div class="feature-card-desc">Row-range chunking, sheet-aware</div>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-card-title">TXT</div>
-                    <div class="feature-card-desc">UTF-8 and Latin-1 encoding fallback</div>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+else:
+    # ── Central intake — the "search bar" ────────────────────────────────
+    prior = st.session_state.get("messages", [])
+    started = any(m.get("role") == "user" for m in prior)
+
+    uploader_kwargs = dict(
+        label="Attach documents",
+        type=["pdf", "docx", "txt", "csv", "xlsx", "xls"],
+        accept_multiple_files=True,
+        key="uploader",
+        label_visibility="collapsed",
     )
 
-else:
+    if started:
+        # Once chatting, keep the uploader tucked away so the thread stays clean.
+        with st.expander("📎  Documents", expanded=False):
+            uploaded_files = st.file_uploader(**uploader_kwargs)
+    else:
+        st.markdown(
+            '<div class="intake-title">Chat with your documents</div>'
+            '<div class="intake-sub">Attach a file, then ask anything — '
+            'every answer is grounded in your document and cited.</div>',
+            unsafe_allow_html=True,
+        )
+        uploaded_files = st.file_uploader(**uploader_kwargs)
+
+    if not uploaded_files:
+        st.markdown(
+            f'<div class="intake-formats">PDF · Word · Excel · CSV · TXT'
+            f' &nbsp;·&nbsp; up to {MAX_FILE_SIZE_MB} MB per file</div>'
+            '<div class="feature-grid" style="margin: 32px auto 0;">'
+            '<div class="feature-card"><div class="feature-card-title">Hybrid Retrieval</div>'
+            '<div class="feature-card-desc">FAISS + BM25 with cross-encoder reranking</div></div>'
+            '<div class="feature-card"><div class="feature-card-title">Cited Answers</div>'
+            '<div class="feature-card-desc">Page-aware citations from every chunk</div></div>'
+            '<div class="feature-card"><div class="feature-card-title">Multi-format</div>'
+            '<div class="feature-card-desc">PDF, Word, TXT, CSV, and Excel</div></div>'
+            '<div class="feature-card"><div class="feature-card-title">Zero Cost</div>'
+            '<div class="feature-card-desc">Local embeddings · Free Gemini or Groq</div></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        st.stop()
+
+    # ── Validate & index ─────────────────────────────────────────────────
     uploaded_files, upload_errors = validate_uploads(uploaded_files)
     for err in upload_errors:
         st.error(err)
@@ -1215,7 +1287,12 @@ else:
 
     document_index = st.session_state["document_index"]
     chunks = document_index["chunks"]
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = load_chat_history(signature)
+    messages = st.session_state["messages"]
+    started = any(m.get("role") == "user" for m in messages)
 
+    # ── Metrics ──────────────────────────────────────────────────────────
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Documents", len(uploaded_files))
     c2.metric("Chunks", len(chunks))
@@ -1233,25 +1310,42 @@ else:
                 unsafe_allow_html=True,
             )
 
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = load_chat_history(signature)
-
     try:
         st.download_button(
             "⬇  Download transcript (PDF)",
-            data=export_chat_pdf(st.session_state["messages"]),
+            data=export_chat_pdf(messages),
             file_name="rag_chat_transcript.pdf",
             mime="application/pdf",
         )
     except Exception:
         st.download_button(
             "⬇  Download transcript (Markdown)",
-            data=export_chat_markdown(st.session_state["messages"]),
+            data=export_chat_markdown(messages),
             file_name="rag_chat_transcript.md",
             mime="text/markdown",
         )
 
-    for message in st.session_state["messages"]:
+    # ── First-question composer (the centred search box) ─────────────────
+    if not started:
+        st.markdown(
+            '<div class="intake-sub" style="margin: 24px auto 12px;">'
+            'Your document is indexed. Ask your first question below.</div>',
+            unsafe_allow_html=True,
+        )
+        with st.form("first_query", clear_on_submit=True):
+            first_q = st.text_input(
+                "First question",
+                label_visibility="collapsed",
+                placeholder="Ask a question about your document…",
+            )
+            asked = st.form_submit_button("Ask", use_container_width=True)
+        if asked and first_q.strip():
+            messages.append({"role": "user", "content": first_q.strip()})
+            save_chat_history(signature, messages)
+            st.rerun()
+
+    # ── Conversation thread ──────────────────────────────────────────────
+    for message in messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
             if message.get("sources"):
@@ -1261,13 +1355,9 @@ else:
                 with st.expander("Retrieval diagnostics", expanded=False):
                     st.dataframe(pd.DataFrame(message["diagnostics"]), use_container_width=True)
 
-    if user_query := st.chat_input("Ask a question about your documents…"):
-        st.session_state["messages"].append({"role": "user", "content": user_query})
-        save_chat_history(signature, st.session_state["messages"])
-
-        with st.chat_message("user"):
-            st.write(user_query)
-
+    # ── Generate the answer when the last turn is still the user's ───────
+    if messages and messages[-1]["role"] == "user":
+        user_query = messages[-1]["content"]
         with st.spinner("Retrieving evidence…"):
             relevant_context, sources_string, diagnostics = "", "", []
             try:
@@ -1288,7 +1378,7 @@ else:
             except Exception as exc:
                 st.error(f"Retrieval failed: {exc}")
 
-        prompt = build_prompt(st.session_state["messages"], relevant_context, user_query)
+        prompt = build_prompt(messages, relevant_context, user_query)
 
         with st.chat_message("assistant"):
             placeholder = st.empty()
@@ -1328,10 +1418,17 @@ else:
                 with st.expander("Retrieval diagnostics", expanded=False):
                     st.dataframe(pd.DataFrame(diagnostics), use_container_width=True)
 
-        st.session_state["messages"].append({
+        messages.append({
             "role": "assistant",
             "content": streamed_text,
             "sources": sources_string,
             "diagnostics": diagnostics,
         })
-        save_chat_history(signature, st.session_state["messages"])
+        save_chat_history(signature, messages)
+
+    # ── Follow-up input, pinned to the bottom once the chat has started ──
+    if started:
+        if user_query := st.chat_input("Ask a follow-up…"):
+            messages.append({"role": "user", "content": user_query})
+            save_chat_history(signature, messages)
+            st.rerun()
