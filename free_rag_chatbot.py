@@ -403,25 +403,6 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    if llm_provider == "Gemini":
-        if not gemini_key:
-            gemini_key = st.text_input(
-                "Gemini API key",
-                type="password",
-                placeholder="Paste your Google AI Studio key…",
-            )
-        else:
-            st.success("Gemini key loaded from secrets.")
-    else:
-        if not groq_key:
-            groq_key = st.text_input(
-                "Groq API key",
-                type="password",
-                placeholder="Paste your Groq key (console.groq.com/keys)…",
-            )
-        else:
-            st.success("Groq key loaded from secrets.")
-
     st.markdown("### Documents")
     uploaded_files = st.file_uploader(
         "Drop files here or click to browse",
@@ -1122,7 +1103,7 @@ st.markdown(
     </div>
     <div class="mobile-hint">
         📱 <strong>On a phone?</strong> Tap the <strong>›</strong> arrow at the top-left to open the menu —
-        that's where you pick your model, add your API key, and upload documents.
+        that's where you pick your model and tune retrieval settings.
     </div>
     """,
     unsafe_allow_html=True,
@@ -1132,12 +1113,11 @@ if not api_ready:
     st.markdown(
         """
         <div class="welcome-wrap">
-            <div class="welcome-icon">🔍</div>
-            <div class="welcome-title">Get started</div>
+            <div class="welcome-icon">🔧</div>
+            <div class="welcome-title">Almost ready</div>
             <div class="welcome-sub">
-                Enter your API key in the sidebar to begin.<br>
-                Choose <strong>Gemini</strong> (Google AI Studio — free tier) or
-                <strong>Groq</strong> (free API, no credit card, fast Llama 3.3 70B).
+                This deployment is being configured. The AI models will be available shortly —
+                no action needed on your end.
             </div>
             <div class="feature-grid">
                 <div class="feature-card">
