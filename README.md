@@ -1,12 +1,21 @@
 # Multi-File RAG Analyzer
 
+![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)
+![FAISS](https://img.shields.io/badge/Vector%20Search-FAISS-00A98F)
+![Status](https://img.shields.io/badge/Live-Demo-brightgreen)
+
 A production-style RAG chatbot built with Streamlit, FAISS, SentenceTransformers, BM25, and cross-encoder reranking. Upload PDF, DOCX, TXT, CSV, XLSX, or XLS files and ask grounded questions with streaming answers and page-aware citations.
 
 Built as a portfolio-ready retrieval system demonstrating document parsing, recursive chunking, local embeddings, vector indexing, hybrid retrieval, reranking, prompt grounding, citation UX, index caching, and persistent chat history — all at zero cost.
 
-## Live Demo
+**▶ [Try the live demo](https://free-rag-chatbot-frc.streamlit.app/)**
 
-[Open the live Streamlit demo](https://free-rag-chatbot-frc.streamlit.app/)
+## Demo
+
+![Demo of the RAG Analyzer: attaching a document and asking a cited question](docs/demo.gif)
+
+> _Attach a document, ask a question, and get a streamed answer with page-level citations._
 
 ## What It Does
 
@@ -51,11 +60,12 @@ Test the app immediately with the sample files in `sample_docs/`:
 - `quarterly_business_summary.txt`
 - `project_risks.csv`
 
-1. Start the app and enter a Gemini or Groq API key in the sidebar.
-2. Upload one or more files — a PDF report, a DOCX policy, a spreadsheet.
+1. Open the app — you land on a centered upload bar (no sign-in or API key needed).
+2. Attach one or more files — a PDF report, a DOCX policy, a spreadsheet.
 3. The app extracts text, builds chunks, creates local embeddings, and writes a FAISS index cache.
-4. Ask a question like `What are the main risks mentioned across these documents?`
+4. Ask your first question right there, e.g. `What are the main risks mentioned across these documents?`
 5. The assistant retrieves evidence, reranks it, streams a grounded answer, and shows expandable citations.
+6. Switch between Gemini and Groq anytime from the sidebar, or download the full conversation as a PDF.
 
 ## Example Questions
 
@@ -71,16 +81,18 @@ Test the app immediately with the sample files in `sample_docs/`:
 ## Retrieval Pipeline
 
 ~~~text
-Documents
+Indexing (once per document set)
   -> text extraction
   -> recursive chunking
   -> SentenceTransformer embeddings (local, CPU)
-  -> FAISS vector search
-  -> optional BM25 hybrid retrieval
-  -> optional query expansion
+  -> FAISS vector index + BM25 keyword index  [cached to disk]
+
+Per query
+  -> optional query expansion (LLM rewrites into query variants)
+  -> FAISS vector search + optional BM25 hybrid merge
   -> optional cross-encoder reranking
-  -> grounded LLM generation
-  -> answer with citations
+  -> grounded context + citations
+  -> streaming LLM answer
 ~~~
 
 ## Key Features
@@ -150,14 +162,14 @@ pip install -r requirements.txt
 streamlit run free_rag_chatbot.py
 ~~~
 
-5. Enter your key in the sidebar, or set it in `.streamlit/secrets.toml`:
+5. Add your keys to `.streamlit/secrets.toml` (the app reads them automatically — there is no in-app key prompt):
 
 ~~~toml
 GEMINI_API_KEY = "your_gemini_key_here"
 GROQ_API_KEY = "your_groq_key_here"
 ~~~
 
-See `.streamlit/secrets.toml.example` for the full template.
+See `.streamlit/secrets.toml.example` for the full template. Only the provider you select in the sidebar needs its key set.
 
 ## Free-Tier Notes
 
@@ -206,9 +218,10 @@ Both are gitignored and safe to delete to free up disk space.
 - Added Groq (Llama 3.3 70B) as a free, fast fallback provider alongside Gemini.
 - Updated Gemini model to gemini-2.5-flash (current stable free-tier model).
 - Redesigned UI with an Apple-style hero banner, iMessage-style chat bubbles, and hover-lift cards.
+- Moved the uploader to a centered, ChatGPT-style search bar with a first-question composer.
+- Removed all in-app API-key prompts — keys are read from Streamlit secrets automatically.
 - Made the layout responsive for phones, with an in-app hint to open the collapsed sidebar.
 - Switched transcript export from Markdown to a styled, black-header PDF.
-- Added three-state main area: API key prompt → upload prompt → chat view.
 - BM25 index now cached per session — built once, not rebuilt on every query.
 - Query expansion now works with both Gemini and Groq providers.
 - Added secrets.toml.example for streamlined local setup.
